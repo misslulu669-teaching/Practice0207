@@ -1,9 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FeedbackResponse } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
-
 // Helper: Convert Blob to Base64
 export const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -43,10 +40,22 @@ export const speakText = (text: string, lang: 'zh-CN' | 'en-US' = 'zh-CN') => {
   window.speechSynthesis.speak(utterance);
 };
 
+// Helper to get client instance safely on demand
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  // If no key is found, we throw here, but only when the action is performed, avoiding app crash on load.
+  if (!apiKey) {
+    console.warn("API Key is missing. Ensure process.env.API_KEY is set or selected.");
+  }
+  // Initialize even if empty to let the SDK throw its specific error or if the environment injects it differently.
+  return new GoogleGenAI({ apiKey: apiKey || '' });
+};
+
 
 // 1. Evaluate Handwriting (Image Analysis)
 export const checkHandwritingWithGemini = async (targetWord: string, targetPinyin: string, imageBlob: Blob): Promise<FeedbackResponse> => {
   try {
+    const ai = getAiClient();
     const base64Image = await blobToBase64(imageBlob);
 
     const prompt = `
@@ -90,13 +99,14 @@ export const checkHandwritingWithGemini = async (targetWord: string, targetPinyi
     return result;
   } catch (error) {
     console.error("Handwriting Check Error:", error);
-    return { isCorrect: false, message: "I couldn't read that clearly. Please try writing bigger!" };
+    return { isCorrect: false, message: "I couldn't read that clearly. Please check your API Key or try writing bigger!" };
   }
 };
 
-// 2. Evaluate Pronunciation (Audio) - Unchanged but ensure we use 2.5 native audio model
+// 2. Evaluate Pronunciation (Audio)
 export const evaluateAudioWithGemini = async (targetPinyin: string, audioBlob: Blob): Promise<FeedbackResponse> => {
   try {
+    const ai = getAiClient();
     const base64Audio = await blobToBase64(audioBlob);
 
     const prompt = `

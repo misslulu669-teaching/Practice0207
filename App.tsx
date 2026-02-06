@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import PinyinPractice from './components/PinyinPractice';
 import SpeakingPractice from './components/SpeakingPractice';
@@ -7,9 +7,42 @@ import DialoguePractice from './components/DialoguePractice';
 import { ActivityType, SubmissionRecord } from './types';
 import { VOCABULARY, DIALOGUES, SOUNDS } from './constants';
 
+// Local interface to handle window.aistudio without global declaration conflict
+interface AIStudioWindow extends Window {
+  aistudio?: {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  };
+}
+
 const App: React.FC = () => {
   const [activity, setActivity] = useState<ActivityType>(ActivityType.MENU);
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  // Check for API Key on mount
+  useEffect(() => {
+    const checkKey = async () => {
+      const win = window as unknown as AIStudioWindow;
+      if (win.aistudio) {
+        // If in Google AI Studio environment, check if key is selected
+        const has = await win.aistudio.hasSelectedApiKey();
+        setHasApiKey(has);
+      } else {
+        // If in standard environment (Netlify/Local), assume process.env.API_KEY is set or will be handled by the service
+        setHasApiKey(true);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    const win = window as unknown as AIStudioWindow;
+    if (win.aistudio) {
+      await win.aistudio.openSelectKey();
+      setHasApiKey(true);
+    }
+  };
 
   const handleActivityComplete = (newRecords?: SubmissionRecord[]) => {
     if (newRecords) {
@@ -102,6 +135,26 @@ const App: React.FC = () => {
         return null;
     }
   };
+
+  if (!hasApiKey) {
+    return (
+        <Layout currentActivity={ActivityType.MENU} onHome={() => {}}>
+            <div className="flex flex-col items-center justify-center h-full text-center">
+                <h2 className="text-3xl font-bold text-gray-700 mb-6">Welcome to Panda Class! 🐼</h2>
+                <p className="text-gray-500 mb-8 text-xl">Please connect your API Key to start.</p>
+                <button 
+                    onClick={handleSelectKey}
+                    className="bg-blue-500 hover:bg-blue-600 text-white text-xl font-bold py-4 px-8 rounded-full border-b-4 border-blue-700 btn-press shadow-lg"
+                >
+                    🔑 Connect API Key
+                </button>
+                <p className="mt-8 text-sm text-gray-400">
+                    Parent note: This app uses Google Gemini API for AI grading.
+                </p>
+            </div>
+        </Layout>
+    );
+  }
 
   return (
     <Layout currentActivity={activity} onHome={() => setActivity(ActivityType.MENU)}>
