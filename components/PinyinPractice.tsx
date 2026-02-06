@@ -60,8 +60,8 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
 
   // Generate a pool of letters based on the target word + some distractors
   const letterPool = useMemo(() => {
-    // Get unique base chars from the pinyin (e.g., 'z', 'u', 'o'...)
-    const targetChars = currentItem.pinyin.split('').map(getBaseChar);
+    // Get unique base chars from the pinyin, ignoring spaces
+    const targetChars = currentItem.pinyin.replace(/\s/g, '').split('').map(getBaseChar);
     const uniqueChars = Array.from(new Set(targetChars));
     
     // Add some common pinyin letters as distractors
@@ -109,15 +109,12 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
         setUserInput(newInput);
     } else {
         // If last char isn't a vowel, maybe shake the screen or play a small error sound?
-        // For now, let's look backwards for the nearest vowel in the last syllable? 
-        // Simplest for kids: Just delete the non-vowel, type vowel, add tone. 
-        // Or simpler: Only allow tone change if last char is vowel.
     }
   };
 
   const checkAnswer = () => {
     const inputString = userInput.join('');
-    // Remove spaces from target just in case, though usually single words don't have them in this app context
+    // Remove spaces from target since we track input without spaces
     const targetString = currentItem.pinyin.replace(/\s/g, '');
 
     if (inputString === targetString) {

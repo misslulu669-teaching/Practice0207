@@ -47,8 +47,18 @@ const Quiz: React.FC<Props> = ({ data, onComplete }) => {
     <div className="flex flex-col items-center justify-center h-full">
       <h2 className="text-3xl font-bold text-gray-700 mb-8">🧩 Match Meanings</h2>
 
-      <div className="bg-white px-8 py-6 rounded-3xl shadow-md border-4 border-blue-100 mb-10 transform -rotate-1">
-        <span className="text-6xl font-bold text-blue-600 tracking-wider">{currentItem.pinyin}</span>
+      {/* Pinyin Cards Display */}
+      <div className="flex flex-wrap gap-4 justify-center mb-10">
+        {currentItem.pinyin.split(' ').map((syllable, idx) => (
+            <div 
+              key={`${currentItem.id}-${idx}`} 
+              className="bg-white px-6 py-4 rounded-2xl shadow-md border-4 border-blue-100 transform -rotate-1 min-w-[100px] text-center"
+            >
+                <span className="text-5xl sm:text-6xl font-bold text-blue-600 font-sans tracking-wide">
+                  {syllable}
+                </span>
+            </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 gap-4 w-full max-w-md">
