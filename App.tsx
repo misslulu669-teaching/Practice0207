@@ -8,7 +8,7 @@ import { ActivityType, SubmissionRecord } from './types';
 import { VOCABULARY, DIALOGUES, SOUNDS } from './constants';
 
 // Local interface to handle window.aistudio without global declaration conflict
-interface AIStudioWindow extends Window {
+interface AIStudioWindow {
   aistudio?: {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;

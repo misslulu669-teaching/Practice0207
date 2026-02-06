@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { VocabularyItem, SubmissionRecord } from '../types';
 import AudioPlayer from './AudioPlayer';
-import { checkHandwritingWithGemini, speakText } from '../services/geminiService';
-import CanvasBoard, { CanvasBoardRef } from './CanvasBoard';
+import { speakText } from '../services/geminiService';
 import { SOUNDS, PLACEHOLDER_IMAGES } from '../constants';
 
 interface Props {
@@ -10,15 +9,36 @@ interface Props {
   onComplete: (records: SubmissionRecord[]) => void;
 }
 
+// Map base vowels to their toned versions [flat, rising, dipping, falling, neutral]
+const TONE_MAP: Record<string, string[]> = {
+  'a': ['ā', 'á', 'ǎ', 'à', 'a'],
+  'e': ['ē', 'é', 'ě', 'è', 'e'],
+  'i': ['ī', 'í', 'ǐ', 'ì', 'i'],
+  'o': ['ō', 'ó', 'ǒ', 'ò', 'o'],
+  'u': ['ū', 'ú', 'ǔ', 'ù', 'u'],
+  'ü': ['ǖ', 'ǘ', 'ǚ', 'ǜ', 'ü'],
+};
+
+// Helper to check if a char is a vowel (including toned versions)
+const isVowel = (char: string) => {
+  const base = getBaseChar(char);
+  return ['a', 'e', 'i', 'o', 'u', 'ü'].includes(base);
+};
+
+// Helper to get base char (e.g., 'á' -> 'a')
+const getBaseChar = (char: string): string => {
+  for (const [base, variants] of Object.entries(TONE_MAP)) {
+    if (variants.includes(char)) return base;
+  }
+  return char;
+};
+
 const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [isCorrect, setIsCorrect] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [penaltyTime, setPenaltyTime] = useState(0); // 0 means no penalty
+  const [userInput, setUserInput] = useState<string[]>([]); // Array of chars for easier manipulation
+  const [penaltyTime, setPenaltyTime] = useState(0); 
   const [records, setRecords] = useState<SubmissionRecord[]>([]);
 
-  const canvasRef = useRef<CanvasBoardRef>(null);
   const currentItem = data[currentIndex];
 
   // Timer effect for penalty
@@ -28,143 +48,237 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
       timer = window.setInterval(() => {
         setPenaltyTime((prev) => prev - 1);
       }, 1000);
+    } else if (penaltyTime === 0) {
+        // When timer hits 0, if the input is still wrong (which it is, because we just finished penalty), reset.
+        // But we need to distinguish between "just initialized" (0) and "finished countdown" (0).
+        // The check button sets penaltyTime to 10. 
+        // We handle the "reset" logic in the render/button mostly, 
+        // but here we can ensure input is cleared if we were in penalty mode.
     }
     return () => clearInterval(timer);
   }, [penaltyTime]);
 
-  const handleSubmit = async () => {
-    if (!canvasRef.current || canvasRef.current.isEmpty()) {
-        alert("Please write something first!");
-        return;
+  // Generate a pool of letters based on the target word + some distractors
+  const letterPool = useMemo(() => {
+    // Get unique base chars from the pinyin (e.g., 'z', 'u', 'o'...)
+    const targetChars = currentItem.pinyin.split('').map(getBaseChar);
+    const uniqueChars = Array.from(new Set(targetChars));
+    
+    // Add some common pinyin letters as distractors
+    const commonDistractors = ['a', 'o', 'e', 'i', 'u', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x'];
+    
+    // Fill up to 12 letters if needed
+    while (uniqueChars.length < 12) {
+        const randomChar = commonDistractors[Math.floor(Math.random() * commonDistractors.length)];
+        if (!uniqueChars.includes(randomChar)) {
+            uniqueChars.push(randomChar);
+        }
     }
+    
+    // Shuffle
+    return uniqueChars.sort(() => 0.5 - Math.random());
+  }, [currentItem]);
 
-    setLoading(true);
-    setFeedback(null);
+  // Reset input when word changes
+  useEffect(() => {
+    setUserInput([]);
+    setPenaltyTime(0);
+  }, [currentIndex]);
 
-    const imageBlob = await canvasRef.current.getBlob();
-    if (!imageBlob) return;
+  const handleAddLetter = (char: string) => {
+    if (penaltyTime > 0) return;
+    setUserInput(prev => [...prev, char]);
+  };
 
-    const result = await checkHandwritingWithGemini(currentItem.chinese, currentItem.pinyin, imageBlob);
+  const handleBackspace = () => {
+    if (penaltyTime > 0) return;
+    setUserInput(prev => prev.slice(0, -1));
+  };
 
-    setLoading(false);
+  const handleToneChange = (toneIndex: number) => {
+    if (penaltyTime > 0 || userInput.length === 0) return;
 
-    if (result.isCorrect) {
-      new Audio(SOUNDS.CORRECT).play();
-      setIsCorrect(true);
-      setFeedback(result.message);
-      speakText("Great job!", "en-US");
-      
-      setRecords(prev => [...prev, {
-        type: 'writing',
-        itemId: currentItem.id,
-        input: imageBlob, // Store blob for teacher
-        score: 1,
-        feedback: result.message
-      }]);
+    // Modify the LAST character if it's a vowel
+    const lastChar = userInput[userInput.length - 1];
+    const base = getBaseChar(lastChar);
 
+    if (TONE_MAP[base]) {
+        const newChar = TONE_MAP[base][toneIndex];
+        const newInput = [...userInput];
+        newInput[newInput.length - 1] = newChar;
+        setUserInput(newInput);
     } else {
-      new Audio(SOUNDS.WRONG).play();
-      setIsCorrect(false);
-      setFeedback(result.message);
-      
-      // Error Flow:
-      // 1. Speak explanation
-      speakText(result.message, "en-US");
-      // 2. Start 10s penalty
-      setPenaltyTime(10);
+        // If last char isn't a vowel, maybe shake the screen or play a small error sound?
+        // For now, let's look backwards for the nearest vowel in the last syllable? 
+        // Simplest for kids: Just delete the non-vowel, type vowel, add tone. 
+        // Or simpler: Only allow tone change if last char is vowel.
     }
   };
 
-  const handleNext = () => {
-    canvasRef.current?.clear();
-    setFeedback(null);
-    setIsCorrect(false);
-    
-    if (currentIndex < data.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+  const checkAnswer = () => {
+    const inputString = userInput.join('');
+    // Remove spaces from target just in case, though usually single words don't have them in this app context
+    const targetString = currentItem.pinyin.replace(/\s/g, '');
+
+    if (inputString === targetString) {
+      // Correct!
+      new Audio(SOUNDS.CORRECT).play();
+      speakText("Excellent!", "en-US");
+      
+      const newRecord: SubmissionRecord = {
+        type: 'writing',
+        itemId: currentItem.id,
+        input: inputString,
+        score: 1,
+        feedback: "Correct Pinyin Construction"
+      };
+      
+      const updatedRecords = [...records, newRecord];
+      setRecords(updatedRecords);
+
+      // Delay slightly before next
+      setTimeout(() => {
+        if (currentIndex < data.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+        } else {
+            onComplete(updatedRecords);
+        }
+      }, 1500);
+
     } else {
-      onComplete(records);
+      // Wrong!
+      new Audio(SOUNDS.WRONG).play();
+      speakText("Not quite. Look at the correct answer!", "en-US");
+      setPenaltyTime(10); // Start 10s penalty
     }
   };
 
   const isPenaltyActive = penaltyTime > 0;
 
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <h2 className="text-3xl font-bold text-gray-700 mb-4">✍️ Write Pinyin</h2>
+    <div className="flex flex-col items-center justify-center h-full w-full">
+      <h2 className="text-3xl font-bold text-gray-700 mb-2">🎹 Build the Pinyin</h2>
       
-      <div className="flex flex-col sm:flex-row gap-6 items-center mb-6">
-        <div className="bg-blue-50 p-4 rounded-3xl border-4 border-blue-200 flex flex-col items-center gap-2">
-            <img 
+      {/* Visual Cue */}
+      <div className="flex items-center gap-4 mb-4">
+         <img 
             src={PLACEHOLDER_IMAGES[currentItem.imageKeyword]} 
             alt={currentItem.english}
-            className="w-32 h-32 object-cover rounded-2xl border-2 border-white shadow-md"
-            />
-            <div className="text-5xl font-bold text-gray-800">{currentItem.chinese}</div>
-            <AudioPlayer text={currentItem.chinese} autoPlay label="Play" />
-        </div>
-
-        {/* Drawing Area */}
-        <div className="relative">
-             <CanvasBoard 
-                ref={canvasRef} 
-                disabled={isCorrect || loading || isPenaltyActive} 
-                width={300} 
-                height={200} 
-             />
-             <button 
-                onClick={() => canvasRef.current?.clear()}
-                disabled={isCorrect || loading || isPenaltyActive}
-                className="absolute top-2 right-2 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-full p-2 text-sm font-bold shadow-sm"
-             >
-                Clear
-             </button>
-        </div>
+            className="w-20 h-20 object-cover rounded-xl border-2 border-white shadow-sm"
+         />
+         <div className="flex flex-col">
+            <span className="text-2xl font-bold text-gray-800">{currentItem.chinese}</span>
+            <AudioPlayer text={currentItem.chinese} autoPlay label="Listen" />
+         </div>
       </div>
 
-      {/* Correct Answer Overlay during Penalty */}
-      {isPenaltyActive && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-              <div className="bg-white p-8 rounded-3xl border-4 border-yellow-400 text-center shadow-2xl animate-bounce">
-                  <h3 className="text-2xl font-bold text-gray-500 mb-2">Look closely!</h3>
-                  <div className="text-7xl font-bold text-blue-600 mb-4">{currentItem.pinyin}</div>
-                  <div className="text-xl text-red-500 font-bold mb-4">Wait {penaltyTime}s to try again...</div>
-                  <div className="text-gray-400">Teacher says: "{feedback}"</div>
-              </div>
-          </div>
-      )}
+      {/* Input Display Area */}
+      <div className="bg-white border-4 border-blue-200 rounded-2xl w-full max-w-md h-20 mb-6 flex items-center justify-center gap-1 shadow-inner overflow-hidden relative">
+         {userInput.map((char, idx) => (
+             <span key={idx} className="text-4xl font-bold text-blue-600 animate-in fade-in slide-in-from-bottom-2">
+                 {char}
+             </span>
+         ))}
+         {userInput.length === 0 && !isPenaltyActive && (
+             <span className="text-gray-300 text-lg">Type letters below...</span>
+         )}
+         <span className="w-1 h-8 bg-blue-400 animate-pulse ml-1"></span>
+      </div>
 
-      <div className="w-full max-w-md space-y-4">
-        {!isCorrect && !isPenaltyActive && (
+      {/* Controls Container */}
+      <div className={`transition-opacity duration-300 ${isPenaltyActive ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}>
+          
+          {/* Tone Bar */}
+          <div className="flex gap-2 mb-4 justify-center">
+             {['¯', '´', 'ˇ', '`'].map((symbol, idx) => (
+                 <button
+                    key={idx}
+                    onClick={() => handleToneChange(idx)}
+                    className="w-12 h-12 rounded-xl bg-orange-100 hover:bg-orange-200 border-b-4 border-orange-300 text-2xl font-bold text-orange-800 btn-press"
+                 >
+                    {symbol}
+                 </button>
+             ))}
+             <button
+                onClick={() => handleToneChange(4)} // Neutral tone
+                className="w-12 h-12 rounded-xl bg-orange-50 hover:bg-orange-100 border-b-4 border-orange-200 text-sm font-bold text-orange-600 btn-press flex items-center justify-center"
+             >
+                None
+             </button>
+          </div>
+
+          {/* Letter Keyboard */}
+          <div className="grid grid-cols-6 gap-2 mb-6 max-w-md">
+             {letterPool.map((char, idx) => (
+                 <button
+                    key={`${char}-${idx}`}
+                    onClick={() => handleAddLetter(char)}
+                    className="w-12 h-12 rounded-xl bg-blue-50 hover:bg-blue-100 border-b-4 border-blue-200 text-xl font-bold text-blue-700 btn-press uppercase"
+                 >
+                    {char}
+                 </button>
+             ))}
+             <button
+                onClick={handleBackspace}
+                className="col-span-2 bg-red-100 hover:bg-red-200 border-b-4 border-red-300 rounded-xl font-bold text-red-600 btn-press flex items-center justify-center gap-1"
+             >
+                ⌫ Del
+             </button>
+          </div>
+
+          {/* Submit Button */}
           <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className={`w-full py-4 rounded-2xl font-bold text-xl text-white transition-all
-              ${loading ? 'bg-gray-300' : 'bg-green-400 hover:bg-green-500 border-b-4 border-green-600 btn-press'}
+            onClick={checkAnswer}
+            disabled={userInput.length === 0}
+            className={`
+                w-full max-w-md py-4 rounded-2xl font-bold text-xl text-white transition-all
+                ${userInput.length === 0 
+                    ? 'bg-gray-300 cursor-not-allowed' 
+                    : 'bg-green-500 hover:bg-green-600 border-b-4 border-green-700 btn-press'}
             `}
           >
-            {loading ? 'Checking your handwriting...' : 'Check Handwriting ✨'}
+            Check Answer ✅
           </button>
-        )}
-
-        {/* Success Feedback */}
-        {isCorrect && feedback && (
-          <div className="p-4 rounded-2xl text-center font-medium text-lg border-2 bg-green-100 border-green-300 text-green-700 animate-pulse">
-            🎉 {feedback}
-          </div>
-        )}
-
-        {isCorrect && (
-          <button
-            onClick={handleNext}
-            className="w-full py-4 rounded-2xl font-bold text-xl text-white bg-blue-400 hover:bg-blue-500 border-b-4 border-blue-600 btn-press"
-          >
-            Next Word ➡️
-          </button>
-        )}
       </div>
 
-      <div className="mt-8 text-gray-400 font-bold">
+      {/* Penalty Overlay */}
+      {isPenaltyActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+           <div className="bg-white rounded-[2rem] p-8 border-8 border-yellow-400 shadow-2xl flex flex-col items-center w-full max-w-sm animate-bounce-small">
+              <div className="text-6xl mb-2">🙈</div>
+              <h3 className="text-2xl font-bold text-gray-600 mb-2">Oops! Correct answer:</h3>
+              
+              <div className="text-6xl font-bold text-blue-600 mb-6 tracking-wider">
+                  {currentItem.pinyin}
+              </div>
+
+              <div className="w-full bg-gray-200 rounded-full h-4 mb-4 overflow-hidden">
+                  <div 
+                    className="bg-red-500 h-full transition-all duration-1000 ease-linear"
+                    style={{ width: `${(penaltyTime / 10) * 100}%` }}
+                  ></div>
+              </div>
+              
+              <p className="text-lg font-bold text-gray-500">
+                  Try again in <span className="text-red-500 text-2xl">{penaltyTime}</span> seconds
+              </p>
+
+              {penaltyTime === 0 && (
+                  <button 
+                    onClick={() => {
+                        setPenaltyTime(0);
+                        setUserInput([]); // Clear input to restart
+                    }}
+                    className="mt-4 px-8 py-3 bg-blue-500 text-white font-bold rounded-xl border-b-4 border-blue-700 btn-press"
+                  >
+                      Try Again 🔄
+                  </button>
+              )}
+           </div>
+        </div>
+      )}
+
+      <div className="mt-6 text-gray-400 font-bold">
         {currentIndex + 1} / {data.length}
       </div>
     </div>
