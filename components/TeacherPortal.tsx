@@ -80,7 +80,8 @@ const SubmissionItem: React.FC<SubmissionItemProps> = ({ sub, lesson }) => {
             <div className={`bg-white border-l-4 ${isCorrect ? 'border-purple-400' : 'border-red-400'} p-4 rounded-r-xl shadow-sm mb-3 flex justify-between items-center`}>
                 <div>
                   <span className="text-xs font-bold text-purple-500 uppercase tracking-wider">🧩 Quiz Match</span>
-                  <div className="font-bold text-gray-700">{vocab?.chinese} -> {vocab?.english}</div>
+                  {/* FIX: Used &rarr; instead of -> to avoid JSX syntax error with > character */}
+                  <div className="font-bold text-gray-700">{vocab?.chinese} &rarr; {vocab?.english}</div>
                 </div>
                 <div className="text-xl">{isCorrect ? '✅ Correct' : '❌ Wrong First Try'}</div>
             </div>
