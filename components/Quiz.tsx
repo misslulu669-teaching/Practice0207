@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { VocabularyItem } from '../types';
+import { VocabularyItem, SubmissionRecord } from '../types';
 import { SOUNDS } from '../constants';
 
 interface Props {
   data: VocabularyItem[];
   onComplete: () => void;
+  onRecord: (record: SubmissionRecord) => void;
 }
 
-const Quiz: React.FC<Props> = ({ data, onComplete }) => {
+const Quiz: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showResult, setShowResult] = useState<'correct' | 'wrong' | null>(null);
+  // Track attempts
+  const [attemptedItems, setAttemptedItems] = useState<Set<string>>(new Set());
 
   const currentItem = data[currentIndex];
   
@@ -23,10 +26,25 @@ const Quiz: React.FC<Props> = ({ data, onComplete }) => {
 
   const handleSelect = (selectedId: string) => {
     if (showResult === 'correct') return; // prevent clicking after success
+    
+    const isRight = selectedId === currentItem.id;
 
-    if (selectedId === currentItem.id) {
+    // --- ONLY RECORD FIRST ATTEMPT ---
+    if (!attemptedItems.has(currentItem.id)) {
+        onRecord({
+            type: 'quiz',
+            itemId: currentItem.id,
+            input: isRight ? 'Correct Match' : 'Incorrect Match', 
+            score: isRight ? 1 : 0,
+            feedback: isRight ? "Correct" : "Wrong"
+        });
+        setAttemptedItems(prev => new Set(prev).add(currentItem.id));
+    }
+
+    if (isRight) {
       new Audio(SOUNDS.CORRECT).play();
       setShowResult('correct');
+
       setTimeout(() => {
         if (currentIndex < data.length - 1) {
             const nextIdx = currentIndex + 1;

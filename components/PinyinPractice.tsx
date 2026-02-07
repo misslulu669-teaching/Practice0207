@@ -6,7 +6,8 @@ import { SOUNDS, PLACEHOLDER_IMAGES } from '../constants';
 
 interface Props {
   data: VocabularyItem[];
-  onComplete: (records: SubmissionRecord[]) => void;
+  onComplete: () => void;
+  onRecord: (record: SubmissionRecord) => void;
 }
 
 // Map base vowels to their toned versions [flat, rising, dipping, falling, neutral]
@@ -19,12 +20,6 @@ const TONE_MAP: Record<string, string[]> = {
   'ü': ['ǖ', 'ǘ', 'ǚ', 'ǜ', 'ü'],
 };
 
-// Helper to check if a char is a vowel (including toned versions)
-const isVowel = (char: string) => {
-  const base = getBaseChar(char);
-  return ['a', 'e', 'i', 'o', 'u', 'ü'].includes(base);
-};
-
 // Helper to get base char (e.g., 'á' -> 'a')
 const getBaseChar = (char: string): string => {
   for (const [base, variants] of Object.entries(TONE_MAP)) {
@@ -33,12 +28,13 @@ const getBaseChar = (char: string): string => {
   return char;
 };
 
-const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
+const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userInput, setUserInput] = useState<string[]>([]); // Array of chars for easier manipulation
   const [penaltyTime, setPenaltyTime] = useState(0); 
-  const [records, setRecords] = useState<SubmissionRecord[]>([]);
-
+  // Track which items have been attempted to ensure we only record the FIRST try
+  const [attemptedItems, setAttemptedItems] = useState<Set<string>>(new Set());
+  
   const currentItem = data[currentIndex];
 
   // Timer effect for penalty
@@ -48,12 +44,6 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
       timer = window.setInterval(() => {
         setPenaltyTime((prev) => prev - 1);
       }, 1000);
-    } else if (penaltyTime === 0) {
-        // When timer hits 0, if the input is still wrong (which it is, because we just finished penalty), reset.
-        // But we need to distinguish between "just initialized" (0) and "finished countdown" (0).
-        // The check button sets penaltyTime to 10. 
-        // We handle the "reset" logic in the render/button mostly, 
-        // but here we can ensure input is cleared if we were in penalty mode.
     }
     return () => clearInterval(timer);
   }, [penaltyTime]);
@@ -107,8 +97,6 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
         const newInput = [...userInput];
         newInput[newInput.length - 1] = newChar;
         setUserInput(newInput);
-    } else {
-        // If last char isn't a vowel, maybe shake the screen or play a small error sound?
     }
   };
 
@@ -116,29 +104,31 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
     const inputString = userInput.join('');
     // Remove spaces from target since we track input without spaces
     const targetString = currentItem.pinyin.replace(/\s/g, '');
+    const isRight = inputString === targetString;
 
-    if (inputString === targetString) {
+    // --- ONLY RECORD THE FIRST ATTEMPT ---
+    if (!attemptedItems.has(currentItem.id)) {
+        onRecord({
+            type: 'writing',
+            itemId: currentItem.id,
+            input: inputString,
+            score: isRight ? 1 : 0,
+            feedback: isRight ? "Correct First Try" : "Incorrect First Try"
+        });
+        setAttemptedItems(prev => new Set(prev).add(currentItem.id));
+    }
+
+    if (isRight) {
       // Correct!
       new Audio(SOUNDS.CORRECT).play();
       speakText("Excellent!", "en-US");
       
-      const newRecord: SubmissionRecord = {
-        type: 'writing',
-        itemId: currentItem.id,
-        input: inputString,
-        score: 1,
-        feedback: "Correct Pinyin Construction"
-      };
-      
-      const updatedRecords = [...records, newRecord];
-      setRecords(updatedRecords);
-
       // Delay slightly before next
       setTimeout(() => {
         if (currentIndex < data.length - 1) {
             setCurrentIndex(prev => prev + 1);
         } else {
-            onComplete(updatedRecords);
+            onComplete();
         }
       }, 1500);
 
@@ -210,7 +200,7 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete }) => {
                  <button
                     key={`${char}-${idx}`}
                     onClick={() => handleAddLetter(char)}
-                    className="w-12 h-12 rounded-xl bg-blue-50 hover:bg-blue-100 border-b-4 border-blue-200 text-xl font-bold text-blue-700 btn-press uppercase"
+                    className="w-12 h-12 rounded-xl bg-blue-50 hover:bg-blue-100 border-b-4 border-blue-200 text-xl font-bold text-blue-700 btn-press"
                  >
                     {char}
                  </button>

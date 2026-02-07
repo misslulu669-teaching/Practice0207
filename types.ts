@@ -1,11 +1,14 @@
 export enum ActivityType {
-  LESSON_SELECT = 'LESSON_SELECT', // New: Lesson Directory
+  LESSON_SELECT = 'LESSON_SELECT',
   MENU = 'MENU',
   PINYIN = 'PINYIN',
   SPEAKING = 'SPEAKING',
   QUIZ = 'QUIZ',
   DIALOGUE = 'DIALOGUE',
-  SUMMARY = 'SUMMARY'
+  SUMMARY = 'SUMMARY',
+  MODULE_SUCCESS = 'MODULE_SUCCESS',
+  TEACHER_REVIEW = 'TEACHER_REVIEW',
+  TEACHER_PORTAL = 'TEACHER_PORTAL'
 }
 
 export interface VocabularyItem {
@@ -28,7 +31,6 @@ export interface DialogueGroup {
   lines: DialogueLine[];
 }
 
-// New: Lesson Structure
 export interface Lesson {
   id: number;
   title: string;
@@ -41,20 +43,33 @@ export interface SubmissionRecord {
   type: 'writing' | 'speaking' | 'quiz' | 'dialogue';
   itemId: string;
   input: string | Blob; 
-  score: number; // 0 or 1 (or percentage)
+  score: number;
   feedback: string;
+}
+
+export interface SavedReport {
+  id: string;
+  lessonId: number;
+  studentName: string;
+  timestamp: number;
+  // We keep the detailed data for stats, but the main content is now the video
+  submissionsCount: number;
+  totalScore: number;
+  videoId?: string; // ID referencing the video in IndexedDB
+  submissions: SubmissionRecord[];
+}
+
+// Teacher Portal Types
+export interface HomeworkEntry {
+  id: string;
+  studentName: string;
+  lessonTitle: string;
+  timestamp: number;
+  score: number;
+  videoId: string;
 }
 
 export interface FeedbackResponse {
   isCorrect: boolean;
   message: string;
-}
-
-export interface LessonReport {
-  lessonId: number;
-  studentName: string;
-  timestamp: string;
-  totalScore: number;
-  maxScore: number;
-  details: string;
 }

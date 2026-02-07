@@ -2,6 +2,7 @@
   "name": "Little Panda Chinese Class",
   "description": "A fun, interactive cartoon-style app for 8-year-olds to practice Chinese Pinyin, speaking, and listening.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "display-capture"
   ]
 }

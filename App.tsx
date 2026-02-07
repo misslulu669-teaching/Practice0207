@@ -4,8 +4,10 @@ import PinyinPractice from './components/PinyinPractice';
 import SpeakingPractice from './components/SpeakingPractice';
 import Quiz from './components/Quiz';
 import DialoguePractice from './components/DialoguePractice';
+import TeacherPortal from './components/TeacherPortal';
 import { ActivityType, SubmissionRecord, Lesson } from './types';
 import { LESSONS, SOUNDS } from './constants';
+import { saveHomeworkReport } from './services/reportService';
 
 interface AIStudioWindow {
   aistudio?: {
@@ -14,14 +16,69 @@ interface AIStudioWindow {
   };
 }
 
+// Separate component to prevent input focus loss on re-renders
+const PartialSubmitBar: React.FC<{
+  studentName: string;
+  setStudentName: (s: string) => void;
+  submissionsCount: number;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+}> = ({ studentName, setStudentName, submissionsCount, onSubmit, isSubmitting }) => (
+    <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full flex flex-col items-center gap-2">
+            <h4 className="text-gray-400 font-bold text-sm uppercase tracking-widest">Submit Progress Independently</h4>
+            <div className="flex gap-2 w-full max-w-md">
+                <input 
+                    value={studentName}
+                    onChange={(e) => setStudentName(e.target.value)}
+                    placeholder="Enter Name"
+                    className="flex-1 bg-gray-50 border-2 border-gray-300 rounded-xl px-4 font-bold text-gray-700 h-12"
+                />
+                <button 
+                    onClick={onSubmit}
+                    disabled={isSubmitting || submissionsCount === 0}
+                    className={`
+                        px-6 rounded-xl font-bold text-white whitespace-nowrap h-12 flex items-center
+                        ${submissionsCount > 0 
+                            ? 'bg-yellow-400 hover:bg-yellow-500 text-yellow-900 border-b-4 border-yellow-600 btn-press' 
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+                    `}
+                >
+                    {isSubmitting ? 'Sending...' : `Submit (${submissionsCount})`}
+                </button>
+            </div>
+            <p className="text-xs text-gray-400">You can submit items now or continue to other modules.</p>
+        </div>
+);
+
 const App: React.FC = () => {
+  // Main State
+  const [userRole, setUserRole] = useState<'student' | 'teacher' | null>(null);
   const [activity, setActivity] = useState<ActivityType>(ActivityType.LESSON_SELECT);
+  
+  // Student State
   const [currentLessonId, setCurrentLessonId] = useState<number | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([]);
+  const [completedLessons, setCompletedLessons] = useState<number[]>([]);
+  const [nextActivity, setNextActivity] = useState<ActivityType>(ActivityType.MENU);
+  
+  // Submission State
+  const [studentName, setStudentName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
 
-  // Track completed lessons to show checkmarks in directory
-  const [completedLessons, setCompletedLessons] = useState<number[]>([]);
+  // Load saved name from local storage on mount
+  useEffect(() => {
+    const savedName = localStorage.getItem('panda_student_name');
+    if (savedName) {
+        setStudentName(savedName);
+    }
+  }, []);
+
+  // Update saved name whenever it changes
+  const handleNameChange = (name: string) => {
+      setStudentName(name);
+      localStorage.setItem('panda_student_name', name);
+  };
 
   useEffect(() => {
     const checkKey = async () => {
@@ -48,124 +105,160 @@ const App: React.FC = () => {
     return LESSONS.find(l => l.id === currentLessonId) || LESSONS[0];
   };
 
+  // --- Student Flow Handlers ---
+
   const handleLessonSelect = (id: number) => {
     setCurrentLessonId(id);
-    setSubmissions([]); // Clear previous submissions
     setActivity(ActivityType.MENU);
   };
 
-  const handleActivityComplete = (newRecords?: SubmissionRecord[]) => {
-    if (newRecords) {
-      setSubmissions(prev => [...prev, ...newRecords]);
-    }
-    // Play success sound
+  const handleRecord = (record: SubmissionRecord) => {
+    setSubmissions(prev => [...prev, record]);
+  };
+
+  const handleActivityComplete = () => {
     new Audio(SOUNDS.SUCCESS).play();
 
-    // Auto-advance logic
+    // Determine next activity logic (standard flow)
+    let next = ActivityType.MENU;
     switch (activity) {
-        case ActivityType.PINYIN:
-            setActivity(ActivityType.SPEAKING);
-            break;
-        case ActivityType.SPEAKING:
-            setActivity(ActivityType.QUIZ);
-            break;
-        case ActivityType.QUIZ:
-            setActivity(ActivityType.DIALOGUE);
-            break;
-        case ActivityType.DIALOGUE:
-            setActivity(ActivityType.SUMMARY);
-            break;
-        default:
-            setActivity(ActivityType.MENU);
-            break;
+        case ActivityType.PINYIN: next = ActivityType.SPEAKING; break;
+        case ActivityType.SPEAKING: next = ActivityType.QUIZ; break;
+        case ActivityType.QUIZ: next = ActivityType.DIALOGUE; break;
+        case ActivityType.DIALOGUE: next = ActivityType.SUMMARY; break;
+        default: next = ActivityType.MENU; break;
     }
-  };
-
-  const calculateScore = () => {
-    return submissions.length * 10;
-  };
-
-  const handleFinishLesson = () => {
-     setActivity(ActivityType.SUMMARY);
-  };
-
-  const generateReport = () => {
-    const lesson = getActiveLesson();
-    const score = calculateScore();
-    const date = new Date().toLocaleDateString();
+    setNextActivity(next);
     
-    return `
-🐼 Little Panda Class Report 🐼
------------------------------
-Student: Student_123
-Lesson: ${lesson.title}
-Date: ${date}
-
-Activities Completed: ${submissions.length}
-Total Score: ${score} points!
-
-Teacher Comments:
-Great effort on ${lesson.title}! 
------------------------------
-    `.trim();
+    // Show module success screen
+    setActivity(ActivityType.MODULE_SUCCESS);
   };
 
-  const handleShare = async () => {
-    const report = generateReport();
-    try {
-        await navigator.clipboard.writeText(report);
-        alert("Report copied to clipboard! You can paste it to your teacher now. 📋");
-    } catch (err) {
-        console.error("Failed to copy", err);
-        alert("Could not copy automatically. Please take a screenshot!");
-    }
+  const handleContinue = () => {
+      setActivity(nextActivity);
   };
 
-  const handleCloseLesson = () => {
-    if (currentLessonId !== null) {
-        if (!completedLessons.includes(currentLessonId)) {
-            setCompletedLessons(prev => [...prev, currentLessonId]);
-        }
-    }
-    setCurrentLessonId(null);
-    setSubmissions([]);
-    setActivity(ActivityType.LESSON_SELECT);
-  };
-
-  // Navigation Handlers
-  const handleBack = () => {
-      // If in a module (Pinyin, etc), go to Menu
-      if (
-          activity === ActivityType.PINYIN || 
-          activity === ActivityType.SPEAKING || 
-          activity === ActivityType.QUIZ || 
-          activity === ActivityType.DIALOGUE ||
-          activity === ActivityType.SUMMARY
-      ) {
-          setActivity(ActivityType.MENU);
-      } 
-      // If in Menu, go to Directory
-      else if (activity === ActivityType.MENU) {
-          handleCloseLesson();
+  const handlePartialSubmit = async () => {
+      if (submissions.length === 0) {
+          alert("No new work to submit yet! Finish a module first.");
+          return;
       }
-      // If in Directory, do nothing (or maybe exit app?)
+      if (!studentName.trim()) {
+          const name = prompt("Enter your name to submit:");
+          if (name) handleNameChange(name);
+          else return;
+      }
+      
+      setIsSubmitting(true);
+      try {
+          // Use current name or prompt again if somehow empty
+          const nameToUse = studentName || "Anonymous";
+          const success = await saveHomeworkReport(
+              currentLessonId || 1,
+              nameToUse,
+              submissions
+          );
+          
+          if (success) {
+              alert(`✅ Successfully submitted ${submissions.length} items to teacher!`);
+              setSubmissions([]); // Clear the queue after successful save
+          } else {
+              alert("Failed to save to database.");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Error submitting homework.");
+      } finally {
+          setIsSubmitting(false);
+      }
   };
 
-  const handlePrevLesson = () => {
-      if (currentLessonId && currentLessonId > 1) {
-          const prevId = currentLessonId - 1;
-          handleLessonSelect(prevId);
-      } else {
-          alert("This is the first lesson!");
-      }
+  // --- Navigation Handlers ---
+
+  const handleSwitchRole = () => {
+    if (userRole === 'student') {
+        setUserRole('teacher');
+        setActivity(ActivityType.TEACHER_PORTAL);
+    } else {
+        setUserRole('student');
+        setActivity(ActivityType.LESSON_SELECT);
+    }
   };
 
   const handleDirectNavigate = (type: ActivityType) => {
-      setActivity(type);
+    if (type === ActivityType.TEACHER_PORTAL) {
+        setUserRole('teacher');
+        setActivity(type);
+    } else {
+        if (userRole !== 'student') setUserRole('student');
+        
+        // Ensure a lesson is selected if jumping to a specific activity
+        if (type !== ActivityType.LESSON_SELECT && type !== ActivityType.MENU && currentLessonId === null) {
+             setCurrentLessonId(1); // Default to lesson 1 if jumping blindly
+        }
+        setActivity(type);
+    }
   };
 
+  // --- Rendering ---
 
-  const renderContent = () => {
+  if (!hasApiKey) {
+    return (
+        <Layout currentActivity={ActivityType.MENU} onHome={() => {}}>
+            <div className="flex flex-col items-center justify-center h-full text-center">
+                <h2 className="text-3xl font-bold text-gray-700 mb-6">Welcome to Panda Class! 🐼</h2>
+                <button onClick={handleSelectKey} className="bg-blue-500 text-white font-bold py-4 px-8 rounded-full border-b-4 border-blue-700 btn-press">
+                    🔑 Connect API Key
+                </button>
+            </div>
+        </Layout>
+    );
+  }
+
+  // Role Selection Screen (Initial)
+  if (!userRole) {
+      return (
+          <Layout currentActivity={ActivityType.MENU} onHome={() => {}}>
+             <div className="flex flex-col items-center justify-center h-full gap-8">
+                 <h2 className="text-3xl font-bold text-gray-700">Who are you?</h2>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+                     <button 
+                        onClick={() => { setUserRole('student'); setActivity(ActivityType.LESSON_SELECT); }}
+                        className="bg-blue-100 hover:bg-blue-200 border-4 border-blue-300 p-8 rounded-3xl btn-press text-center group"
+                     >
+                         <div className="text-6xl mb-4 group-hover:scale-110 transition-transform">🧑‍🎓</div>
+                         <div className="text-2xl font-bold text-blue-800">I am a Student</div>
+                     </button>
+                     <button 
+                        onClick={() => { setUserRole('teacher'); setActivity(ActivityType.TEACHER_PORTAL); }}
+                        className="bg-green-100 hover:bg-green-200 border-4 border-green-300 p-8 rounded-3xl btn-press text-center group"
+                     >
+                         <div className="text-6xl mb-4 group-hover:scale-110 transition-transform">👨‍🏫</div>
+                         <div className="text-2xl font-bold text-green-800">I am a Teacher</div>
+                     </button>
+                 </div>
+             </div>
+          </Layout>
+      );
+  }
+
+  // Teacher View
+  if (userRole === 'teacher') {
+      return (
+        <Layout 
+            currentActivity={ActivityType.TEACHER_PORTAL} 
+            onHome={() => setActivity(ActivityType.LESSON_SELECT)}
+            userRole={userRole}
+            onSwitchRole={handleSwitchRole}
+            onNavigate={handleDirectNavigate}
+        >
+            <TeacherPortal onBack={handleSwitchRole} />
+        </Layout>
+      );
+  }
+
+  // Student View Content Wrapper
+  const renderStudentContent = () => {
     const activeLesson = getActiveLesson();
 
     switch (activity) {
@@ -184,12 +277,7 @@ Great effort on ${lesson.title}!
                                 <h3 className="text-2xl font-bold text-blue-600 group-hover:text-blue-700">{lesson.title}</h3>
                                 <p className="text-gray-500 mt-2">{lesson.description}</p>
                             </div>
-                            {completedLessons.includes(lesson.id) && (
-                                <span className="text-4xl">✅</span>
-                            )}
-                            {!completedLessons.includes(lesson.id) && (
-                                <span className="text-4xl opacity-20 group-hover:opacity-50">▶️</span>
-                            )}
+                            <span className="text-4xl opacity-20 group-hover:opacity-50">▶️</span>
                         </button>
                     ))}
                 </div>
@@ -199,134 +287,125 @@ Great effort on ${lesson.title}!
       case ActivityType.MENU:
         return (
           <div className="w-full">
-            <h2 className="text-2xl font-bold text-gray-400 mb-4 text-center uppercase tracking-widest">{activeLesson.title}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4">
-                <MenuButton 
-                label="WRITING"
-                title="✍️ 拼音书写" 
-                subtitle="Build Pinyin" 
-                color="bg-blue-400"
-                onClick={() => setActivity(ActivityType.PINYIN)} 
-                />
-                <MenuButton 
-                label="SPEAKING"
-                title="🎤 口语跟读" 
-                subtitle="Listen & Repeat" 
-                color="bg-green-400"
-                onClick={() => setActivity(ActivityType.SPEAKING)} 
-                />
-                <MenuButton 
-                label="QUIZ"
-                title="🧩 听音辨意" 
-                subtitle="Match Meanings" 
-                color="bg-purple-400"
-                onClick={() => setActivity(ActivityType.QUIZ)} 
-                />
-                <MenuButton 
-                label="DIALOGUE"
-                title="💬 情景对话" 
-                subtitle="Role Play" 
-                color="bg-pink-400"
-                onClick={() => setActivity(ActivityType.DIALOGUE)} 
-                />
-            </div>
+            <h2 className="text-2xl font-bold text-gray-400 mb-6 text-center uppercase tracking-widest">{activeLesson.title}</h2>
             
-            <div className="mt-8 flex justify-center">
-                <button 
-                    onClick={handleFinishLesson}
-                    disabled={submissions.length === 0}
-                    className={`
-                        px-8 py-4 rounded-full font-bold text-xl text-white shadow-lg btn-press
-                        ${submissions.length > 0 ? 'bg-yellow-400 hover:bg-yellow-500 border-b-4 border-yellow-600' : 'bg-gray-300 border-gray-400 cursor-not-allowed'}
-                    `}
-                >
-                    📝 Finish Lesson & Get Report
-                </button>
-            </div>
-            <div className="text-center mt-2 text-gray-400 text-sm">
-                Complete at least one activity to finish.
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4">
+                <MenuButton label="Step 1" title="✍️ 拼音书写" subtitle="Build Pinyin" color="bg-blue-400" onClick={() => setActivity(ActivityType.PINYIN)} />
+                <MenuButton label="Step 2" title="🎤 口语跟读" subtitle="Listen & Repeat" color="bg-green-400" onClick={() => setActivity(ActivityType.SPEAKING)} />
+                <MenuButton label="Step 3" title="🧩 听音辨意" subtitle="Match Meanings" color="bg-purple-400" onClick={() => setActivity(ActivityType.QUIZ)} />
+                <MenuButton label="Step 4" title="💬 情景对话" subtitle="Role Play" color="bg-pink-400" onClick={() => setActivity(ActivityType.DIALOGUE)} />
             </div>
           </div>
         );
 
-      case ActivityType.PINYIN:
-        return <PinyinPractice data={activeLesson.vocabulary} onComplete={handleActivityComplete} />;
-      case ActivityType.SPEAKING:
-        return <SpeakingPractice data={activeLesson.vocabulary} onComplete={handleActivityComplete} />;
-      case ActivityType.QUIZ:
-        return <Quiz data={activeLesson.vocabulary} onComplete={() => handleActivityComplete()} />;
-      case ActivityType.DIALOGUE:
-        return <DialoguePractice data={activeLesson.dialogues} onComplete={(records) => handleActivityComplete(records)} />;
-        
-      case ActivityType.SUMMARY:
+      case ActivityType.MODULE_SUCCESS:
         return (
           <div className="flex flex-col items-center justify-center h-full text-center w-full">
-             <div className="text-6xl mb-4">🎉</div>
-             <h2 className="text-3xl font-bold text-blue-600 mb-2">Lesson Complete!</h2>
-             <p className="text-xl text-gray-600 mb-6">{activeLesson.title}</p>
+             <div className="text-6xl mb-4">🌟</div>
+             <h2 className="text-3xl font-bold text-blue-600 mb-4">Good Job!</h2>
              
-             <div className="bg-white p-6 rounded-2xl border-4 border-yellow-200 shadow-inner w-full max-w-md mb-8">
-                 <div className="flex justify-between items-center mb-4 border-b pb-2">
-                     <span className="text-gray-500 font-bold">Activities Done</span>
-                     <span className="text-2xl font-bold text-green-500">{submissions.length}</span>
-                 </div>
-                 <div className="flex justify-between items-center">
-                     <span className="text-gray-500 font-bold">Total Score</span>
-                     <span className="text-2xl font-bold text-purple-500">{calculateScore()}</span>
-                 </div>
-             </div>
-             
-             <div className="flex flex-col gap-4 w-full max-w-xs">
+             <div className="flex flex-col gap-4 w-full max-w-sm">
                 <button 
-                  onClick={handleShare}
-                  className="w-full py-4 rounded-2xl font-bold text-xl text-white bg-green-500 hover:bg-green-600 border-b-4 border-green-700 btn-press flex items-center justify-center gap-2"
+                    onClick={handleContinue}
+                    className="w-full py-4 rounded-2xl font-bold text-xl text-white bg-blue-500 hover:bg-blue-600 border-b-4 border-blue-700 btn-press"
                 >
-                  <span>📋</span> Copy Report for Teacher
+                    {nextActivity === ActivityType.SUMMARY ? 'Finish Lesson 🏁' : 'Next Activity ➡️'}
                 </button>
-                <button 
-                  onClick={handleCloseLesson}
-                  className="w-full py-4 rounded-2xl font-bold text-xl text-gray-600 bg-gray-200 hover:bg-gray-300 border-b-4 border-gray-400 btn-press"
-                >
-                  Back to Lessons
-                </button>
+                <PartialSubmitBar 
+                    studentName={studentName}
+                    setStudentName={handleNameChange}
+                    submissionsCount={submissions.length}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handlePartialSubmit}
+                />
              </div>
           </div>
         );
+      
+      // For all practice modes, append the PartialSubmitBar below
+      // Now passing onRecord to all components to allow incremental state updates
+      case ActivityType.PINYIN:
+        return (
+            <>
+                <PinyinPractice data={activeLesson.vocabulary} onComplete={handleActivityComplete} onRecord={handleRecord} />
+                <PartialSubmitBar 
+                    studentName={studentName}
+                    setStudentName={handleNameChange}
+                    submissionsCount={submissions.length}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handlePartialSubmit}
+                />
+            </>
+        );
+      case ActivityType.SPEAKING:
+        return (
+            <>
+                <SpeakingPractice data={activeLesson.vocabulary} onComplete={handleActivityComplete} onRecord={handleRecord} />
+                <PartialSubmitBar 
+                    studentName={studentName}
+                    setStudentName={handleNameChange}
+                    submissionsCount={submissions.length}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handlePartialSubmit}
+                />
+            </>
+        );
+      case ActivityType.QUIZ:
+        return (
+            <>
+                <Quiz data={activeLesson.vocabulary} onComplete={handleActivityComplete} onRecord={handleRecord} />
+                <PartialSubmitBar 
+                    studentName={studentName}
+                    setStudentName={handleNameChange}
+                    submissionsCount={submissions.length}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handlePartialSubmit}
+                />
+            </>
+        );
+      case ActivityType.DIALOGUE:
+        return (
+            <>
+                <DialoguePractice data={activeLesson.dialogues} onComplete={handleActivityComplete} onRecord={handleRecord} />
+                <PartialSubmitBar 
+                    studentName={studentName}
+                    setStudentName={handleNameChange}
+                    submissionsCount={submissions.length}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handlePartialSubmit}
+                />
+            </>
+        );
+        
+      case ActivityType.SUMMARY:
+          return (
+             <div className="flex flex-col items-center justify-center h-full text-center w-full">
+                 <div className="text-6xl mb-4">🎉</div>
+                 <h2 className="text-3xl font-bold text-blue-600 mb-6">Lesson Complete!</h2>
+                 <PartialSubmitBar 
+                    studentName={studentName}
+                    setStudentName={handleNameChange}
+                    submissionsCount={submissions.length}
+                    isSubmitting={isSubmitting}
+                    onSubmit={handlePartialSubmit}
+                />
+             </div>
+          );
+
       default:
         return null;
     }
   };
 
-  if (!hasApiKey) {
-    return (
-        <Layout currentActivity={ActivityType.MENU} onHome={() => {}}>
-            <div className="flex flex-col items-center justify-center h-full text-center">
-                <h2 className="text-3xl font-bold text-gray-700 mb-6">Welcome to Panda Class! 🐼</h2>
-                <p className="text-gray-500 mb-8 text-xl">Please connect your API Key to start.</p>
-                <button 
-                    onClick={handleSelectKey}
-                    className="bg-blue-500 hover:bg-blue-600 text-white text-xl font-bold py-4 px-8 rounded-full border-b-4 border-blue-700 btn-press shadow-lg"
-                >
-                    🔑 Connect API Key
-                </button>
-            </div>
-        </Layout>
-    );
-  }
-
   return (
     <Layout 
         currentActivity={activity} 
-        onHome={() => {
-            setActivity(ActivityType.LESSON_SELECT);
-            setCurrentLessonId(null);
-        }}
-        showNav={currentLessonId !== null}
-        onBack={handleBack}
-        onPrevLesson={handlePrevLesson}
+        onHome={() => setActivity(ActivityType.LESSON_SELECT)}
+        userRole={userRole}
+        onSwitchRole={handleSwitchRole}
         onNavigate={handleDirectNavigate}
     >
-      {renderContent()}
+      {renderStudentContent()}
     </Layout>
   );
 };

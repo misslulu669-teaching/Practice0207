@@ -5,15 +5,15 @@ import { SOUNDS } from '../constants';
 
 interface Props {
   data: DialogueGroup[];
-  onComplete: (records: SubmissionRecord[]) => void;
+  onComplete: () => void;
+  onRecord: (record: SubmissionRecord) => void;
 }
 
-const DialoguePractice: React.FC<Props> = ({ data, onComplete }) => {
+const DialoguePractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const [currentGroupIdx, setCurrentGroupIdx] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [records, setRecords] = useState<SubmissionRecord[]>([]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -79,20 +79,18 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete }) => {
 
   const handleNext = () => {
     // Save record if available
-    let updatedRecords = records;
     if (recordedBlob) {
         // Find the B line to associate ID (using dialogue ID + index as mock ID)
         const studentLineIdx = currentDialogue.lines.findIndex(l => l.speaker === 'B');
         const itemId = `${currentDialogue.id}_line${studentLineIdx}`;
         
-        updatedRecords = [...records, {
+        onRecord({
             type: 'speaking',
             itemId: itemId,
             input: recordedBlob,
             score: 1,
             feedback: 'Dialogue Response'
-        }];
-        setRecords(updatedRecords);
+        });
     }
 
     // Reset local state
@@ -103,7 +101,7 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete }) => {
     if (currentGroupIdx < data.length - 1) {
       setCurrentGroupIdx(prev => prev + 1);
     } else {
-      onComplete(updatedRecords);
+      onComplete();
     }
   };
 

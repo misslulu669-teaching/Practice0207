@@ -5,15 +5,15 @@ import { PLACEHOLDER_IMAGES } from '../constants';
 
 interface Props {
   data: VocabularyItem[];
-  onComplete: (records: SubmissionRecord[]) => void;
+  onComplete: () => void;
+  onRecord: (record: SubmissionRecord) => void;
 }
 
-const SpeakingPractice: React.FC<Props> = ({ data, onComplete }) => {
+const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [records, setRecords] = useState<SubmissionRecord[]>([]);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -89,12 +89,9 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete }) => {
          feedback: "Recorded"
       } : null;
 
-    // Create the updated list
-    const updatedRecords = newRecord ? [...records, newRecord] : records;
-
-    // If there is a record, update state for local tracking (optional, but good for consistency)
+    // Report to parent
     if (newRecord) {
-        setRecords(updatedRecords);
+        onRecord(newRecord);
     }
 
     // Reset local state for next item
@@ -105,8 +102,8 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete }) => {
     if (currentIndex < data.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
-      // Finished all items, submit everything
-      onComplete(updatedRecords);
+      // Finished all items
+      onComplete();
     }
   };
 
