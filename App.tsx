@@ -184,13 +184,15 @@ const App: React.FC = () => {
       const report = await prepareReport();
       if (!report) return;
 
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
       try {
         const file = await getReportFile(report);
 
-        // 1. Try Native Web Share (Mobile/Tablet)
-        // This attempts to open the OS Share Sheet. 
-        // If the user selects WeChat, the file is automatically attached ("filled").
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // 1. Try Native Web Share (Preferred for Mobile/Tablet)
+        // Note: navigator.canShare might return false on some Androids even if share works for files,
+        // but it's safer to check.
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 title: 'Panda Class Homework',
@@ -199,40 +201,48 @@ const App: React.FC = () => {
             return; // Success
         }
         
-        // Throw to trigger fallback if canShare returns false
-        throw new Error("Web Share API not supported or no file sharing support.");
+        // If we get here, native sharing is not supported or failed check
+        throw new Error("Native share not supported");
+
       } catch (error) {
-          console.log("Native share failed, using Desktop Fallback", error);
+          console.log("Native share failed, using Fallback strategy", error);
           
-          // 2. Desktop Fallback
-          // A. Trigger Download
+          // 2. Fallback: Force Download
           await exportReportToJSON(report);
           
-          // B. Robustly wake up WeChat Desktop
-          // We use a hidden iframe to launch the protocol. 
-          // This avoids 'popup blocked' issues and page navigation issues better than window.location.
-          const iframe = document.createElement("iframe");
-          iframe.style.display = "none";
-          // Try standard WeChat protocol
-          iframe.src = "weixin://"; 
-          document.body.appendChild(iframe);
-          
-          // Cleanup iframe after a delay
-          setTimeout(() => {
-            if(document.body.contains(iframe)) {
-                document.body.removeChild(iframe);
-            }
-          }, 3000);
+          if (isMobile) {
+              // Mobile Fallback Strategy
+              // On mobile, we cannot drag-and-drop. We must guide them to the file.
+              
+              // Attempt to open WeChat to be helpful
+              setTimeout(() => {
+                window.location.href = "weixin://";
+              }, 1500);
 
-          // C. Show Instruction
-          // Since we cannot programmatically 'fill' the file on Desktop (OS security limit),
-          // we guide the user to drag the just-downloaded file.
-          alert(
-              "✅ Homework File Saved!\n\n" +
-              "WeChat should open automatically.\n" +
-              "1. Select your Teacher.\n" +
-              "2. Drag the file you just downloaded into the chat."
-          );
+              alert(
+                  "✅ Homework Saved to Files!\n\n" +
+                  "Since automatic sharing failed:\n" +
+                  "1. The file was saved to your 'Files' or 'Downloads' app.\n" +
+                  "2. WeChat will open automatically.\n" +
+                  "3. In WeChat, click '+' -> 'Files' -> Select the file you just saved."
+              );
+          } else {
+              // Desktop Fallback Strategy
+              const iframe = document.createElement("iframe");
+              iframe.style.display = "none";
+              iframe.src = "weixin://"; 
+              document.body.appendChild(iframe);
+              setTimeout(() => {
+                if(document.body.contains(iframe)) document.body.removeChild(iframe);
+              }, 3000);
+
+              alert(
+                  "✅ Homework File Downloaded!\n\n" +
+                  "WeChat has been launched.\n" +
+                  "1. Open the chat with your teacher.\n" +
+                  "2. Drag and drop the downloaded file into the chat."
+              );
+          }
       }
   };
 

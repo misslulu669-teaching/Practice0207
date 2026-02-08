@@ -193,7 +193,10 @@ export const getReportFile = async (report: SavedReport): Promise<File> => {
   const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-');
   const filename = `panda_homework_${report.studentName}_${dateStr}_${timeStr}.json`;
   
-  return new File([jsonString], filename, { type: 'application/json' });
+  // CRITICAL FIX: Use application/octet-stream.
+  // This forces browsers (especially iOS Safari) to treat it as a download/file to save
+  // rather than trying to display the JSON text string.
+  return new File([jsonString], filename, { type: 'application/octet-stream' });
 };
 
 export const exportReportToJSON = async (report: SavedReport) => {
@@ -201,12 +204,24 @@ export const exportReportToJSON = async (report: SavedReport) => {
   const url = URL.createObjectURL(file);
   
   const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", url);
-  downloadAnchorNode.setAttribute("download", file.name);
+  downloadAnchorNode.href = url;
+  downloadAnchorNode.download = file.name;
+  
+  // Required for Firefox and some mobile browsers
   document.body.appendChild(downloadAnchorNode);
+  
+  // Trigger click
   downloadAnchorNode.click();
-  downloadAnchorNode.remove();
-  URL.revokeObjectURL(url);
+  
+  // CRITICAL FIX: Add a timeout before cleanup.
+  // Mobile browsers can be slow to process the click event.
+  // Revoking immediately can cause the download to fail on iOS.
+  setTimeout(() => {
+    if (document.body.contains(downloadAnchorNode)) {
+        document.body.removeChild(downloadAnchorNode);
+    }
+    URL.revokeObjectURL(url);
+  }, 500);
 };
 
 export const importReportFromJSON = async (file: File): Promise<boolean> => {
