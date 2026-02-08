@@ -7,7 +7,7 @@ import DialoguePractice from './components/DialoguePractice';
 import TeacherPortal from './components/TeacherPortal';
 import { ActivityType, SubmissionRecord, Lesson } from './types';
 import { LESSONS, SOUNDS } from './constants';
-import { saveHomeworkReport, exportReportToJSON } from './services/reportService';
+import { saveHomeworkReport, exportReportToJSON, getReportFile } from './services/reportService';
 
 interface AIStudioWindow {
   aistudio?: {
@@ -16,38 +16,60 @@ interface AIStudioWindow {
   };
 }
 
-// Separate component to prevent input focus loss on re-renders
+// --- REDESIGNED SUBMIT BAR (WeChat Style) ---
 const PartialSubmitBar: React.FC<{
   studentName: string;
   setStudentName: (s: string) => void;
   submissionsCount: number;
-  onSubmit: () => void;
-  isSubmitting: boolean;
-}> = ({ studentName, setStudentName, submissionsCount, onSubmit, isSubmitting }) => (
-    <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full flex flex-col items-center gap-2">
-            <h4 className="text-gray-400 font-bold text-sm uppercase tracking-widest">Done for today?</h4>
-            <div className="flex gap-2 w-full max-w-md">
-                <input 
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    placeholder="Enter Name"
-                    className="flex-1 bg-gray-50 border-2 border-gray-300 rounded-xl px-4 font-bold text-gray-700 h-12"
-                />
+  onWeChatShare: () => void;
+  onDownload: () => void;
+}> = ({ studentName, setStudentName, submissionsCount, onWeChatShare, onDownload }) => (
+    <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full flex flex-col items-center gap-4">
+            <h4 className="text-gray-400 font-bold text-sm uppercase tracking-widest">
+                Save your progress ({submissionsCount} items)
+            </h4>
+            
+            <input 
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
+                placeholder="Enter Your Name"
+                className="w-full max-w-md bg-gray-50 border-2 border-gray-300 rounded-xl px-4 font-bold text-gray-700 h-12 text-center focus:border-blue-400 outline-none"
+            />
+
+            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                {/* Option 1: WeChat Share */}
                 <button 
-                    onClick={onSubmit}
-                    disabled={isSubmitting || submissionsCount === 0}
+                    onClick={onWeChatShare}
+                    disabled={submissionsCount === 0 || !studentName.trim()}
                     className={`
-                        px-6 rounded-xl font-bold text-white whitespace-nowrap h-12 flex items-center
-                        ${submissionsCount > 0 
-                            ? 'bg-yellow-400 hover:bg-yellow-500 text-yellow-900 border-b-4 border-yellow-600 btn-press' 
+                        flex-1 px-4 py-3 rounded-xl font-bold text-white whitespace-nowrap flex items-center justify-center gap-2
+                        ${submissionsCount > 0 && studentName.trim()
+                            ? 'bg-green-500 hover:bg-green-600 border-b-4 border-green-700 btn-press' 
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
                     `}
                 >
-                    {isSubmitting ? 'Saving...' : `💾 Save Ticket (${submissionsCount})`}
+                    <span className="text-xl">💬</span> Send to WeChat
+                </button>
+
+                {/* Option 2: Direct Download */}
+                <button 
+                    onClick={onDownload}
+                    disabled={submissionsCount === 0 || !studentName.trim()}
+                    className={`
+                        flex-1 px-4 py-3 rounded-xl font-bold text-white whitespace-nowrap flex items-center justify-center gap-2
+                        ${submissionsCount > 0 && studentName.trim()
+                            ? 'bg-yellow-400 hover:bg-yellow-500 border-b-4 border-yellow-600 text-yellow-900 btn-press' 
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+                    `}
+                >
+                    📥 Save File
                 </button>
             </div>
-            <p className="text-xs text-gray-400 text-center">Save this file and send it to your teacher!</p>
-        </div>
+            
+            {!studentName.trim() && (
+                <p className="text-xs text-red-400">Please enter your name to save.</p>
+            )}
+    </div>
 );
 
 const App: React.FC = () => {
@@ -63,7 +85,6 @@ const App: React.FC = () => {
   
   // Submission State
   const [studentName, setStudentName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
 
   // Load saved name from local storage on mount
@@ -138,42 +159,60 @@ const App: React.FC = () => {
       setActivity(nextActivity);
   };
 
-  const handlePartialSubmit = async () => {
-      if (submissions.length === 0) {
-          alert("No new work to submit yet! Finish a module first.");
-          return;
-      }
-      if (!studentName.trim()) {
-          const name = prompt("Enter your name to submit:");
-          if (name) handleNameChange(name);
-          else return;
-      }
-      
-      setIsSubmitting(true);
-      try {
-          // Use current name or prompt again if somehow empty
-          const nameToUse = studentName || "Anonymous";
-          // 1. Save locally
-          const report = await saveHomeworkReport(
-              currentLessonId || 1,
-              nameToUse,
-              submissions
-          );
-          
-          if (report) {
-              // 2. Export to JSON file for remote sharing
-              await exportReportToJSON(report);
+  // --- SUBMISSION HANDLERS ---
 
-              alert(`✅ Saved! A file has been downloaded.\nPlease send this file to your teacher.`);
-              setSubmissions([]); // Clear the queue after successful save
-          } else {
-              alert("Failed to save to database.");
-          }
-      } catch (e) {
-          console.error(e);
-          alert("Error submitting homework.");
-      } finally {
-          setIsSubmitting(false);
+  const prepareReport = async () => {
+      if (submissions.length === 0) return null;
+      const nameToUse = studentName || "Anonymous";
+      return await saveHomeworkReport(
+          currentLessonId || 1,
+          nameToUse,
+          submissions
+      );
+  };
+
+  const handleDirectDownload = async () => {
+      const report = await prepareReport();
+      if (report) {
+          await exportReportToJSON(report);
+      } else {
+          alert("Nothing to download yet!");
+      }
+  };
+
+  const handleWeChatShare = async () => {
+      const report = await prepareReport();
+      if (!report) return;
+
+      try {
+        const file = await getReportFile(report);
+
+        // Check for Web Share API support
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'Panda Class Homework',
+                text: `Homework submission from ${studentName}.`
+            });
+            // Share sheet opened successfully
+            return;
+        } else {
+            throw new Error("Web Share API not supported for files.");
+        }
+      } catch (error) {
+          // Fallback if sharing is not supported or cancelled (common on Desktop)
+          console.log("Sharing failed or not supported, falling back to download", error);
+          
+          await exportReportToJSON(report);
+          
+          alert(
+              "✅ Homework file saved!\n\n" +
+              "Since auto-sharing isn't supported on this device:\n" +
+              "1. Open WeChat (微信)\n" +
+              "2. Select your Teacher\n" +
+              "3. Click '+' -> 'File' (文件)\n" +
+              "4. Select the file you just saved."
+          );
       }
   };
 
@@ -195,10 +234,8 @@ const App: React.FC = () => {
         setActivity(type);
     } else {
         if (userRole !== 'student') setUserRole('student');
-        
-        // Ensure a lesson is selected if jumping to a specific activity
         if (type !== ActivityType.LESSON_SELECT && type !== ActivityType.MENU && currentLessonId === null) {
-             setCurrentLessonId(1); // Default to lesson 1 if jumping blindly
+             setCurrentLessonId(1);
         }
         setActivity(type);
     }
@@ -265,6 +302,16 @@ const App: React.FC = () => {
   const renderStudentContent = () => {
     const activeLesson = getActiveLesson();
 
+    const commonSubmitBar = (
+        <PartialSubmitBar 
+            studentName={studentName}
+            setStudentName={handleNameChange}
+            submissionsCount={submissions.length}
+            onWeChatShare={handleWeChatShare}
+            onDownload={handleDirectDownload}
+        />
+    );
+
     switch (activity) {
       case ActivityType.LESSON_SELECT:
         return (
@@ -315,84 +362,86 @@ const App: React.FC = () => {
                 >
                     {nextActivity === ActivityType.SUMMARY ? 'Finish Lesson 🏁' : 'Next Activity ➡️'}
                 </button>
-                <PartialSubmitBar 
-                    studentName={studentName}
-                    setStudentName={handleNameChange}
-                    submissionsCount={submissions.length}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handlePartialSubmit}
-                />
+                {commonSubmitBar}
              </div>
           </div>
         );
       
-      // For all practice modes, append the PartialSubmitBar below
-      // Now passing onRecord to all components to allow incremental state updates
       case ActivityType.PINYIN:
         return (
             <>
                 <PinyinPractice data={activeLesson.vocabulary} onComplete={handleActivityComplete} onRecord={handleRecord} />
-                <PartialSubmitBar 
-                    studentName={studentName}
-                    setStudentName={handleNameChange}
-                    submissionsCount={submissions.length}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handlePartialSubmit}
-                />
+                {commonSubmitBar}
             </>
         );
       case ActivityType.SPEAKING:
         return (
             <>
                 <SpeakingPractice data={activeLesson.vocabulary} onComplete={handleActivityComplete} onRecord={handleRecord} />
-                <PartialSubmitBar 
-                    studentName={studentName}
-                    setStudentName={handleNameChange}
-                    submissionsCount={submissions.length}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handlePartialSubmit}
-                />
+                {commonSubmitBar}
             </>
         );
       case ActivityType.QUIZ:
         return (
             <>
                 <Quiz data={activeLesson.vocabulary} onComplete={handleActivityComplete} onRecord={handleRecord} />
-                <PartialSubmitBar 
-                    studentName={studentName}
-                    setStudentName={handleNameChange}
-                    submissionsCount={submissions.length}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handlePartialSubmit}
-                />
+                {commonSubmitBar}
             </>
         );
       case ActivityType.DIALOGUE:
         return (
             <>
                 <DialoguePractice data={activeLesson.dialogues} onComplete={handleActivityComplete} onRecord={handleRecord} />
-                <PartialSubmitBar 
-                    studentName={studentName}
-                    setStudentName={handleNameChange}
-                    submissionsCount={submissions.length}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handlePartialSubmit}
-                />
+                {commonSubmitBar}
             </>
         );
         
       case ActivityType.SUMMARY:
           return (
-             <div className="flex flex-col items-center justify-center h-full text-center w-full">
-                 <div className="text-6xl mb-4">🎉</div>
-                 <h2 className="text-3xl font-bold text-blue-600 mb-6">Lesson Complete!</h2>
-                 <PartialSubmitBar 
-                    studentName={studentName}
-                    setStudentName={handleNameChange}
-                    submissionsCount={submissions.length}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handlePartialSubmit}
-                />
+             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center w-full">
+                 <div className="text-7xl mb-6">🎉</div>
+                 <h2 className="text-4xl font-bold text-blue-600 mb-2">Lesson Complete!</h2>
+                 <p className="text-gray-500 font-bold mb-8">You have completed all activities.</p>
+                 
+                 <div className="w-full max-w-md bg-white border-4 border-blue-100 rounded-[2rem] p-6 shadow-xl">
+                    <h3 className="text-xl font-bold text-gray-700 mb-4">📥 Turn In Homework</h3>
+                    
+                    <div className="mb-6">
+                        <label className="block text-left text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Student Name</label>
+                        <input 
+                            value={studentName}
+                            onChange={(e) => handleNameChange(e.target.value)}
+                            placeholder="Enter Name"
+                            className="w-full bg-gray-50 border-2 border-gray-300 rounded-xl px-4 font-bold text-gray-700 h-12"
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                         {/* WeChat Main CTA */}
+                        <button 
+                            onClick={handleWeChatShare}
+                            disabled={!studentName.trim()}
+                            className={`w-full py-4 rounded-xl font-bold text-xl text-white border-b-4 btn-press flex items-center justify-center gap-3
+                                ${!studentName.trim() ? 'bg-gray-300 border-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 border-green-700'}
+                            `}
+                        >
+                            <span>💬</span> Send to WeChat Friend
+                        </button>
+                        
+                        <div className="text-center text-gray-300 text-sm font-bold">- OR -</div>
+                        
+                        {/* Download Secondary CTA */}
+                        <button 
+                                 onClick={handleDirectDownload}
+                                 disabled={!studentName.trim()}
+                                 className={`w-full py-3 rounded-xl font-bold text-lg text-white border-b-4 btn-press
+                                    ${!studentName.trim() ? 'bg-gray-300 border-gray-400 cursor-not-allowed' : 'bg-yellow-400 hover:bg-yellow-500 border-yellow-600 text-yellow-900'}
+                                 `}
+                            >
+                                📥 Save to Device
+                        </button>
+                    </div>
+                 </div>
              </div>
           );
 

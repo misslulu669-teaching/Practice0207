@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SavedReport, Lesson, SubmissionRecord } from '../types';
 import { getAllHomeworkReports, deleteReport, clearAllReports, importReportFromJSON } from '../services/reportService';
 import { LESSONS } from '../constants';
@@ -95,7 +95,7 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<SavedReport | null>(null);
   const [loading, setLoading] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     loadReports();
@@ -108,42 +108,67 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
     setLoading(false);
   };
 
+  // Fixed handleDelete with Optimistic UI Update
   const handleDelete = async (e: React.MouseEvent, id: string) => {
+    // Crucial: Stop propagation to prevent opening the report while deleting it
     e.stopPropagation();
-    if (confirm("Delete this homework?")) {
-      await deleteReport(id);
-      loadReports();
-      if (selectedReport?.id === id) setSelectedReport(null);
-    }
-  };
+    e.preventDefault();
 
-  const handleClearAll = async () => {
-      if (confirm("Delete ALL homework history? This cannot be undone.")) {
-          await clearAllReports();
-          loadReports();
+    if (confirm("Delete this homework permanently?")) {
+      // 1. Optimistic Update: Remove from UI immediately to feel responsive
+      setReports(prev => prev.filter(r => r.id !== id));
+      
+      // 2. Clear selection if we just deleted the open report
+      if (selectedReport?.id === id) {
           setSelectedReport(null);
       }
-  };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLoading(true);
-      const success = await importReportFromJSON(file);
-      if (success) {
-        alert("Homework imported successfully!");
-        await loadReports();
-      } else {
-        alert("Failed to import file. Make sure it's a valid Panda Homework JSON.");
+      // 3. Perform actual DB deletion in background
+      try {
+        await deleteReport(id);
+      } catch (err) {
+        console.error("Failed to delete from DB", err);
+        // Optional: Revert UI if DB fails (rare), or just alert
+        alert("Error deleting from database, please refresh.");
+        loadReports();
       }
-      setLoading(false);
-      // Reset input
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  // Fixed handleClearAll with Optimistic UI Update
+  const handleClearAll = async () => {
+      if (confirm("Delete ALL homework history? This cannot be undone.")) {
+          // 1. Optimistic Update
+          setReports([]);
+          setSelectedReport(null);
+
+          // 2. DB Operation
+          try {
+            await clearAllReports();
+          } catch (err) {
+              console.error("Failed to clear DB", err);
+              loadReports();
+          }
+      }
+  };
+
+  // METHOD: Manual File Import
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      setIsProcessing(true);
+      importReportFromJSON(file).then(success => {
+          setIsProcessing(false);
+          if (success) {
+              alert("✅ File Imported Successfully!");
+              loadReports();
+          } else {
+              alert("❌ Failed to import file. It might be corrupted.");
+          }
+          // Reset input to allow selecting same file again if needed
+          e.target.value = '';
+      });
   };
 
   // --- Render Detail View ---
@@ -185,35 +210,49 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
   // --- Render List View ---
   return (
     <div className="w-full h-full flex flex-col">
-       <div className="flex justify-between items-center mb-6 pb-4 border-b">
+       <div className="flex justify-between items-center mb-4 pb-4 border-b">
          <div>
             <h2 className="text-3xl font-bold text-gray-800">🍎 Teacher Portal</h2>
-            <p className="text-xs text-gray-400 mt-1">View local & imported homework</p>
+            <p className="text-xs text-gray-400 mt-1">Review student submissions</p>
          </div>
          <button onClick={onBack} className="text-gray-500 hover:text-gray-700 font-bold">Exit</button>
        </div>
 
        <div className="flex-1 flex flex-col">
-           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-2">
-               <div className="flex items-center gap-2">
-                   <h3 className="text-xl font-bold text-blue-800">Inbox ({reports.length})</h3>
-                   <input 
-                      type="file" 
-                      accept=".json" 
-                      ref={fileInputRef} 
-                      className="hidden" 
-                      onChange={handleFileChange}
-                   />
-                   <button 
-                      onClick={handleImportClick}
-                      className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold btn-press flex items-center gap-1"
-                   >
-                      📥 Import File
-                   </button>
-               </div>
-               
+           {/* IMPORT SECTION - SIMPLIFIED */}
+           <div className="bg-white p-6 rounded-2xl border-2 border-green-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    📥 Receive Homework
+                </h3>
+                
+                {/* Method 2: File Upload (Only one now) */}
+                <div className="bg-green-50 p-6 rounded-xl border border-green-200 flex flex-col justify-between">
+                    <div>
+                            <label className="text-sm font-bold text-green-600 uppercase tracking-wide block mb-2">Import Homework File</label>
+                            <p className="text-sm text-green-600 mb-4">Select the JSON file received via WeChat or Email.</p>
+                    </div>
+                    <div className="flex gap-2 items-center h-14">
+                            <label className={`
+                            flex-1 cursor-pointer bg-white border-2 border-dashed border-green-400 rounded-lg h-full flex items-center justify-center hover:bg-green-50 transition-colors
+                            ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
+                            `}>
+                            <span className="text-green-700 font-bold text-lg">📂 Select Homework File</span>
+                            <input 
+                                type="file" 
+                                accept=".json" 
+                                onChange={handleFileImport} 
+                                className="hidden" 
+                                disabled={isProcessing}
+                            />
+                            </label>
+                    </div>
+                </div>
+           </div>
+
+           <div className="flex justify-between items-end mb-4">
+               <h3 className="text-xl font-bold text-blue-800">Inbox ({reports.length})</h3>
                {reports.length > 0 && (
-                   <button onClick={handleClearAll} className="text-xs text-red-400 hover:text-red-600 underline">Clear All History</button>
+                   <button onClick={handleClearAll} className="text-xs text-red-400 hover:text-red-600 underline cursor-pointer">Clear All History</button>
                )}
            </div>
 
@@ -221,10 +260,9 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
                {loading ? (
                    <div className="text-center py-10 text-gray-400">Loading records...</div>
                ) : reports.length === 0 ? (
-                   <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200">
-                       <span className="text-5xl mb-4">📭</span>
-                       <p className="text-gray-400 font-bold">No homework submitted yet.</p>
-                       <p className="text-xs text-gray-400 mt-2">Click "Import File" to load student work.</p>
+                   <div className="flex flex-col items-center justify-center h-48 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200">
+                       <span className="text-4xl mb-2">☁️</span>
+                       <p className="text-gray-400 font-bold">No homework yet.</p>
                    </div>
                ) : (
                    reports.map((report) => {
@@ -233,7 +271,7 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
                            <div 
                              key={report.id}
                              onClick={() => setSelectedReport(report)}
-                             className="bg-white border-2 border-gray-100 p-4 rounded-xl hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
+                             className="bg-white border-2 border-gray-100 p-4 rounded-xl hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group relative"
                            >
                                <div className="flex justify-between items-center">
                                    <div className="flex items-center gap-4">
@@ -251,14 +289,17 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
                                        <span className="font-bold text-yellow-600 bg-yellow-100 px-3 py-1 rounded-lg text-sm">
                                            {report.totalScore} pts
                                        </span>
-                                       <span className="text-xs text-gray-400">
-                                           {new Date(report.timestamp).toLocaleDateString()}
+                                       {/* TIMESTAMP UPDATED TO SHOW SECONDS */}
+                                       <span className="text-xs text-gray-400 font-mono">
+                                           {new Date(report.timestamp).toLocaleString()}
                                        </span>
                                    </div>
                                </div>
-                               <div className="mt-3 flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                               
+                               {/* Updated Delete Button: Using absolute positioning for better hit target separation */}
+                               <div className="mt-4 flex gap-2 justify-end">
                                     <button 
-                                        className="text-xs text-red-400 hover:text-red-600 px-2 py-1"
+                                        className="text-xs font-bold text-red-500 hover:text-white bg-red-50 hover:bg-red-500 px-4 py-2 rounded-lg transition-colors border border-red-200 z-10"
                                         onClick={(e) => handleDelete(e, report.id)}
                                     >
                                         Delete

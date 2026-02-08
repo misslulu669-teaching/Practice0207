@@ -63,7 +63,7 @@ export const saveHomeworkReport = async (
 };
 
 /**
- * Get all homework summaries for the list
+ * Get all homework reports
  */
 export const getAllHomeworkReports = async (): Promise<SavedReport[]> => {
   try {
@@ -87,69 +87,126 @@ export const getAllHomeworkReports = async (): Promise<SavedReport[]> => {
 };
 
 /**
- * Delete a report
+ * Delete a report - Fixed to await transaction completion
  */
 export const deleteReport = async (id: string): Promise<void> => {
   const db = await openDB();
-  const tx = db.transaction(STORE_REPORTS, 'readwrite');
-  tx.objectStore(STORE_REPORTS).delete(id);
+  return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_REPORTS, 'readwrite');
+      const store = tx.objectStore(STORE_REPORTS);
+      store.delete(id);
+      
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+  });
 };
 
+/**
+ * Clear all reports - Fixed to await transaction completion
+ */
 export const clearAllReports = async (): Promise<void> => {
     const db = await openDB();
-    const tx = db.transaction(STORE_REPORTS, 'readwrite');
-    tx.objectStore(STORE_REPORTS).clear();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_REPORTS, 'readwrite');
+        const store = tx.objectStore(STORE_REPORTS);
+        store.clear();
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
 };
 
 // --- IMPORT / EXPORT UTILITIES ---
 
 // Helper: Convert Base64 back to Blob
 const base64ToBlob = (base64: string, mimeType: string): Blob => {
-  const byteCharacters = atob(base64);
-  const byteArrays = [];
-
-  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-    const slice = byteCharacters.slice(offset, offset + 512);
-    const byteNumbers = new Array(slice.length);
-    for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    byteArrays.push(byteArray);
+  try {
+      const byteCharacters = atob(base64);
+      const byteArrays = [];
+    
+      for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+        const slice = byteCharacters.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        byteArrays.push(byteArray);
+      }
+    
+      return new Blob(byteArrays, { type: mimeType });
+  } catch (e) {
+      console.error("Base64 decoding failed", e);
+      return new Blob([], { type: mimeType });
   }
+};
 
-  return new Blob(byteArrays, { type: mimeType });
+// Helper to prepare report for transport (convert Blobs to Base64)
+const prepareReportForTransport = async (report: SavedReport) => {
+    const serializableSubmissions = await Promise.all(report.submissions.map(async (sub) => {
+        if (sub.input instanceof Blob) {
+          const base64 = await blobToBase64(sub.input);
+          return {
+            ...sub,
+            input: {
+              type: 'blob',
+              mimeType: sub.input.type,
+              data: base64
+            }
+          };
+        }
+        return sub;
+      }));
+    
+      return {
+        ...report,
+        submissions: serializableSubmissions
+      };
+};
+
+// Helper to parse report from transport (Base64 back to Blobs)
+const parseReportFromTransport = (json: any): SavedReport => {
+    const submissions = json.submissions.map((sub: any) => {
+        if (sub.input && typeof sub.input === 'object' && sub.input.type === 'blob') {
+          return {
+            ...sub,
+            input: base64ToBlob(sub.input.data, sub.input.mimeType)
+          };
+        }
+        return sub;
+     });
+
+     return {
+       ...json,
+       submissions
+     };
+};
+
+// New Helper: Generate a File object for sharing
+export const getReportFile = async (report: SavedReport): Promise<File> => {
+  const exportData = await prepareReportForTransport(report);
+  const jsonString = JSON.stringify(exportData);
+  
+  // Format filename with precise timestamp for clarity
+  const date = new Date();
+  const dateStr = date.toISOString().split('T')[0];
+  const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-');
+  const filename = `panda_homework_${report.studentName}_${dateStr}_${timeStr}.json`;
+  
+  return new File([jsonString], filename, { type: 'application/json' });
 };
 
 export const exportReportToJSON = async (report: SavedReport) => {
-  // Deep copy and transform Blobs to Base64 strings for JSON storage
-  const serializableSubmissions = await Promise.all(report.submissions.map(async (sub) => {
-    if (sub.input instanceof Blob) {
-      const base64 = await blobToBase64(sub.input);
-      return {
-        ...sub,
-        input: {
-          type: 'blob',
-          mimeType: sub.input.type,
-          data: base64
-        }
-      };
-    }
-    return sub;
-  }));
-
-  const exportData = {
-    ...report,
-    submissions: serializableSubmissions
-  };
-
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+  const file = await getReportFile(report);
+  const url = URL.createObjectURL(file);
+  
   const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", `panda_homework_${report.studentName}_${Date.now()}.json`);
+  downloadAnchorNode.setAttribute("href", url);
+  downloadAnchorNode.setAttribute("download", file.name);
   document.body.appendChild(downloadAnchorNode);
   downloadAnchorNode.click();
   downloadAnchorNode.remove();
+  URL.revokeObjectURL(url);
 };
 
 export const importReportFromJSON = async (file: File): Promise<boolean> => {
@@ -159,28 +216,19 @@ export const importReportFromJSON = async (file: File): Promise<boolean> => {
       try {
         const json = JSON.parse(event.target?.result as string);
         
-        // Transform Base64 objects back to Blobs
-        const submissions = json.submissions.map((sub: any) => {
-           if (sub.input && typeof sub.input === 'object' && sub.input.type === 'blob') {
-             return {
-               ...sub,
-               input: base64ToBlob(sub.input.data, sub.input.mimeType)
-             };
-           }
-           return sub;
-        });
+        // Validate basic structure
+        if (!json.id || !json.submissions) {
+            console.warn("Invalid JSON structure");
+            resolve(false);
+            return;
+        }
 
-        const report: SavedReport = {
-          ...json,
-          submissions
-        };
+        const report = parseReportFromTransport(json);
 
         // Save to DB
         const db = await openDB();
         const tx = db.transaction(STORE_REPORTS, 'readwrite');
         const store = tx.objectStore(STORE_REPORTS);
-        // Force a new ID to avoid collisions if imported multiple times, or keep original?
-        // Let's keep original ID to dedupe if needed, but here we just put()
         store.put(report); 
         
         resolve(true);
@@ -189,6 +237,7 @@ export const importReportFromJSON = async (file: File): Promise<boolean> => {
         resolve(false);
       }
     };
+    reader.onerror = () => resolve(false);
     reader.readAsText(file);
   });
 };
