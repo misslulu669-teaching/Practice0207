@@ -7,7 +7,7 @@ import DialoguePractice from './components/DialoguePractice';
 import TeacherPortal from './components/TeacherPortal';
 import { ActivityType, SubmissionRecord, Lesson } from './types';
 import { LESSONS, SOUNDS } from './constants';
-import { saveHomeworkReport } from './services/reportService';
+import { saveHomeworkReport, exportReportToJSON } from './services/reportService';
 
 interface AIStudioWindow {
   aistudio?: {
@@ -25,7 +25,7 @@ const PartialSubmitBar: React.FC<{
   isSubmitting: boolean;
 }> = ({ studentName, setStudentName, submissionsCount, onSubmit, isSubmitting }) => (
     <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full flex flex-col items-center gap-2">
-            <h4 className="text-gray-400 font-bold text-sm uppercase tracking-widest">Submit Progress Independently</h4>
+            <h4 className="text-gray-400 font-bold text-sm uppercase tracking-widest">Done for today?</h4>
             <div className="flex gap-2 w-full max-w-md">
                 <input 
                     value={studentName}
@@ -43,10 +43,10 @@ const PartialSubmitBar: React.FC<{
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
                     `}
                 >
-                    {isSubmitting ? 'Sending...' : `Submit (${submissionsCount})`}
+                    {isSubmitting ? 'Saving...' : `💾 Save Ticket (${submissionsCount})`}
                 </button>
             </div>
-            <p className="text-xs text-gray-400">You can submit items now or continue to other modules.</p>
+            <p className="text-xs text-gray-400 text-center">Save this file and send it to your teacher!</p>
         </div>
 );
 
@@ -153,14 +153,18 @@ const App: React.FC = () => {
       try {
           // Use current name or prompt again if somehow empty
           const nameToUse = studentName || "Anonymous";
-          const success = await saveHomeworkReport(
+          // 1. Save locally
+          const report = await saveHomeworkReport(
               currentLessonId || 1,
               nameToUse,
               submissions
           );
           
-          if (success) {
-              alert(`✅ Successfully submitted ${submissions.length} items to teacher!`);
+          if (report) {
+              // 2. Export to JSON file for remote sharing
+              await exportReportToJSON(report);
+
+              alert(`✅ Saved! A file has been downloaded.\nPlease send this file to your teacher.`);
               setSubmissions([]); // Clear the queue after successful save
           } else {
               alert("Failed to save to database.");

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SavedReport, Lesson, SubmissionRecord } from '../types';
-import { getAllHomeworkReports, deleteReport, clearAllReports } from '../services/reportService';
+import { getAllHomeworkReports, deleteReport, clearAllReports, importReportFromJSON } from '../services/reportService';
 import { LESSONS } from '../constants';
 
 interface Props {
@@ -80,7 +80,7 @@ const SubmissionItem: React.FC<SubmissionItemProps> = ({ sub, lesson }) => {
             <div className={`bg-white border-l-4 ${isCorrect ? 'border-purple-400' : 'border-red-400'} p-4 rounded-r-xl shadow-sm mb-3 flex justify-between items-center`}>
                 <div>
                   <span className="text-xs font-bold text-purple-500 uppercase tracking-wider">🧩 Quiz Match</span>
-                  {/* FIX: Used &rarr; instead of -> to avoid JSX syntax error with > character */}
+                  {/* Using &rarr; entity for arrow */}
                   <div className="font-bold text-gray-700">{vocab?.chinese} &rarr; {vocab?.english}</div>
                 </div>
                 <div className="text-xl">{isCorrect ? '✅ Correct' : '❌ Wrong First Try'}</div>
@@ -95,6 +95,7 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<SavedReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadReports();
@@ -122,6 +123,27 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
           loadReports();
           setSelectedReport(null);
       }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLoading(true);
+      const success = await importReportFromJSON(file);
+      if (success) {
+        alert("Homework imported successfully!");
+        await loadReports();
+      } else {
+        alert("Failed to import file. Make sure it's a valid Panda Homework JSON.");
+      }
+      setLoading(false);
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   // --- Render Detail View ---
@@ -164,13 +186,32 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
   return (
     <div className="w-full h-full flex flex-col">
        <div className="flex justify-between items-center mb-6 pb-4 border-b">
-         <h2 className="text-3xl font-bold text-gray-800">🍎 Teacher Portal</h2>
+         <div>
+            <h2 className="text-3xl font-bold text-gray-800">🍎 Teacher Portal</h2>
+            <p className="text-xs text-gray-400 mt-1">View local & imported homework</p>
+         </div>
          <button onClick={onBack} className="text-gray-500 hover:text-gray-700 font-bold">Exit</button>
        </div>
 
        <div className="flex-1 flex flex-col">
-           <div className="flex justify-between items-end mb-4">
-               <h3 className="text-xl font-bold text-blue-800">Inbox ({reports.length})</h3>
+           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-2">
+               <div className="flex items-center gap-2">
+                   <h3 className="text-xl font-bold text-blue-800">Inbox ({reports.length})</h3>
+                   <input 
+                      type="file" 
+                      accept=".json" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      onChange={handleFileChange}
+                   />
+                   <button 
+                      onClick={handleImportClick}
+                      className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold btn-press flex items-center gap-1"
+                   >
+                      📥 Import File
+                   </button>
+               </div>
+               
                {reports.length > 0 && (
                    <button onClick={handleClearAll} className="text-xs text-red-400 hover:text-red-600 underline">Clear All History</button>
                )}
@@ -183,6 +224,7 @@ const TeacherPortal: React.FC<Props> = ({ onBack }) => {
                    <div className="flex flex-col items-center justify-center h-64 bg-gray-50 rounded-3xl border-4 border-dashed border-gray-200">
                        <span className="text-5xl mb-4">📭</span>
                        <p className="text-gray-400 font-bold">No homework submitted yet.</p>
+                       <p className="text-xs text-gray-400 mt-2">Click "Import File" to load student work.</p>
                    </div>
                ) : (
                    reports.map((report) => {

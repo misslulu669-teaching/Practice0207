@@ -1,4 +1,5 @@
 import { SavedReport, SubmissionRecord } from '../types';
+import { blobToBase64 } from './geminiService';
 
 // --- IndexedDB Configuration ---
 const DB_NAME = 'PandaClassDB';
@@ -28,7 +29,7 @@ export const saveHomeworkReport = async (
   lessonId: number,
   studentName: string,
   submissions: SubmissionRecord[]
-): Promise<boolean> => {
+): Promise<SavedReport | null> => {
   try {
     const db = await openDB();
     
@@ -45,7 +46,7 @@ export const saveHomeworkReport = async (
       submissions: submissions // This array contains Blobs, which IndexedDB handles natively
     };
 
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_REPORTS, 'readwrite');
       const store = tx.objectStore(STORE_REPORTS);
       const req = store.add(report);
@@ -53,9 +54,11 @@ export const saveHomeworkReport = async (
       req.onsuccess = () => resolve(true);
       req.onerror = () => reject(req.error);
     });
+
+    return report;
   } catch (e) {
     console.error("Save failed", e);
-    return false;
+    return null;
   }
 };
 
@@ -96,4 +99,96 @@ export const clearAllReports = async (): Promise<void> => {
     const db = await openDB();
     const tx = db.transaction(STORE_REPORTS, 'readwrite');
     tx.objectStore(STORE_REPORTS).clear();
+};
+
+// --- IMPORT / EXPORT UTILITIES ---
+
+// Helper: Convert Base64 back to Blob
+const base64ToBlob = (base64: string, mimeType: string): Blob => {
+  const byteCharacters = atob(base64);
+  const byteArrays = [];
+
+  for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+    const slice = byteCharacters.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    byteArrays.push(byteArray);
+  }
+
+  return new Blob(byteArrays, { type: mimeType });
+};
+
+export const exportReportToJSON = async (report: SavedReport) => {
+  // Deep copy and transform Blobs to Base64 strings for JSON storage
+  const serializableSubmissions = await Promise.all(report.submissions.map(async (sub) => {
+    if (sub.input instanceof Blob) {
+      const base64 = await blobToBase64(sub.input);
+      return {
+        ...sub,
+        input: {
+          type: 'blob',
+          mimeType: sub.input.type,
+          data: base64
+        }
+      };
+    }
+    return sub;
+  }));
+
+  const exportData = {
+    ...report,
+    submissions: serializableSubmissions
+  };
+
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `panda_homework_${report.studentName}_${Date.now()}.json`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+};
+
+export const importReportFromJSON = async (file: File): Promise<boolean> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        
+        // Transform Base64 objects back to Blobs
+        const submissions = json.submissions.map((sub: any) => {
+           if (sub.input && typeof sub.input === 'object' && sub.input.type === 'blob') {
+             return {
+               ...sub,
+               input: base64ToBlob(sub.input.data, sub.input.mimeType)
+             };
+           }
+           return sub;
+        });
+
+        const report: SavedReport = {
+          ...json,
+          submissions
+        };
+
+        // Save to DB
+        const db = await openDB();
+        const tx = db.transaction(STORE_REPORTS, 'readwrite');
+        const store = tx.objectStore(STORE_REPORTS);
+        // Force a new ID to avoid collisions if imported multiple times, or keep original?
+        // Let's keep original ID to dedupe if needed, but here we just put()
+        store.put(report); 
+        
+        resolve(true);
+      } catch (e) {
+        console.error("Import failed", e);
+        resolve(false);
+      }
+    };
+    reader.readAsText(file);
+  });
 };
