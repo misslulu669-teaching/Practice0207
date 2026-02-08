@@ -187,31 +187,51 @@ const App: React.FC = () => {
       try {
         const file = await getReportFile(report);
 
-        // Check for Web Share API support
+        // 1. Try Native Web Share (Mobile/Tablet)
+        // This attempts to open the OS Share Sheet. 
+        // If the user selects WeChat, the file is automatically attached ("filled").
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 title: 'Panda Class Homework',
                 text: `Homework submission from ${studentName}.`
             });
-            // Share sheet opened successfully
-            return;
-        } else {
-            throw new Error("Web Share API not supported for files.");
+            return; // Success
         }
+        
+        // Throw to trigger fallback if canShare returns false
+        throw new Error("Web Share API not supported or no file sharing support.");
       } catch (error) {
-          // Fallback if sharing is not supported or cancelled (common on Desktop)
-          console.log("Sharing failed or not supported, falling back to download", error);
+          console.log("Native share failed, using Desktop Fallback", error);
           
+          // 2. Desktop Fallback
+          // A. Trigger Download
           await exportReportToJSON(report);
           
+          // B. Robustly wake up WeChat Desktop
+          // We use a hidden iframe to launch the protocol. 
+          // This avoids 'popup blocked' issues and page navigation issues better than window.location.
+          const iframe = document.createElement("iframe");
+          iframe.style.display = "none";
+          // Try standard WeChat protocol
+          iframe.src = "weixin://"; 
+          document.body.appendChild(iframe);
+          
+          // Cleanup iframe after a delay
+          setTimeout(() => {
+            if(document.body.contains(iframe)) {
+                document.body.removeChild(iframe);
+            }
+          }, 3000);
+
+          // C. Show Instruction
+          // Since we cannot programmatically 'fill' the file on Desktop (OS security limit),
+          // we guide the user to drag the just-downloaded file.
           alert(
-              "✅ Homework file saved!\n\n" +
-              "Since auto-sharing isn't supported on this device:\n" +
-              "1. Open WeChat (微信)\n" +
-              "2. Select your Teacher\n" +
-              "3. Click '+' -> 'File' (文件)\n" +
-              "4. Select the file you just saved."
+              "✅ Homework File Saved!\n\n" +
+              "WeChat should open automatically.\n" +
+              "1. Select your Teacher.\n" +
+              "2. Drag the file you just downloaded into the chat."
           );
       }
   };
