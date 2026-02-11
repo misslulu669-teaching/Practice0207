@@ -7,7 +7,7 @@ import DialoguePractice from './components/DialoguePractice';
 import TeacherPortal from './components/TeacherPortal';
 import { ActivityType, SubmissionRecord, Lesson } from './types';
 import { LESSONS, SOUNDS } from './constants';
-import { saveHomeworkReport, exportReportToJSON, getReportFile } from './services/reportService';
+import { saveHomeworkReport, exportReportToJSON, exportReportToHTML, getReportFile } from './services/reportService';
 
 interface AIStudioWindow {
   aistudio?: {
@@ -22,8 +22,9 @@ const PartialSubmitBar: React.FC<{
   setStudentName: (s: string) => void;
   submissionsCount: number;
   onWeChatShare: () => void;
-  onDownload: () => void;
-}> = ({ studentName, setStudentName, submissionsCount, onWeChatShare, onDownload }) => (
+  onDownloadJSON: () => void;
+  onDownloadHTML: () => void;
+}> = ({ studentName, setStudentName, submissionsCount, onWeChatShare, onDownloadJSON, onDownloadHTML }) => (
     <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full flex flex-col items-center gap-4">
             <h4 className="text-gray-400 font-bold text-sm uppercase tracking-widest">
                 Save your progress ({submissionsCount} items)
@@ -48,21 +49,35 @@ const PartialSubmitBar: React.FC<{
                             : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
                     `}
                 >
-                    <span className="text-xl">💬</span> Send to WeChat
+                    <span className="text-xl">💬</span> To WeChat
                 </button>
-
-                {/* Option 2: Direct Download */}
-                <button 
-                    onClick={onDownload}
+            </div>
+            
+            {/* Secondary Options */}
+            <div className="flex gap-2 w-full max-w-md">
+                 <button 
+                    onClick={onDownloadHTML}
                     disabled={submissionsCount === 0 || !studentName.trim()}
                     className={`
-                        flex-1 px-4 py-3 rounded-xl font-bold text-white whitespace-nowrap flex items-center justify-center gap-2
+                        flex-1 px-3 py-2 rounded-lg font-bold text-sm text-white flex items-center justify-center gap-1
                         ${submissionsCount > 0 && studentName.trim()
-                            ? 'bg-yellow-400 hover:bg-yellow-500 border-b-4 border-yellow-600 text-yellow-900 btn-press' 
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+                            ? 'bg-blue-400 hover:bg-blue-500 border-b-4 border-blue-600 btn-press' 
+                            : 'bg-gray-300 cursor-not-allowed'}
                     `}
                 >
-                    📥 Save File
+                    📄 Report Card (HTML)
+                </button>
+                <button 
+                    onClick={onDownloadJSON}
+                    disabled={submissionsCount === 0 || !studentName.trim()}
+                    className={`
+                        flex-1 px-3 py-2 rounded-lg font-bold text-sm text-white flex items-center justify-center gap-1
+                        ${submissionsCount > 0 && studentName.trim()
+                            ? 'bg-yellow-400 hover:bg-yellow-500 border-b-4 border-yellow-600 text-yellow-900 btn-press' 
+                            : 'bg-gray-300 cursor-not-allowed'}
+                    `}
+                >
+                    📥 Backup (JSON)
                 </button>
             </div>
             
@@ -180,6 +195,15 @@ const App: React.FC = () => {
       }
   };
 
+  const handleHTMLDownload = async () => {
+      const report = await prepareReport();
+      if (report) {
+          await exportReportToHTML(report);
+      } else {
+          alert("Nothing to download yet!");
+      }
+  };
+
   const handleWeChatShare = async () => {
       const report = await prepareReport();
       if (!report) return;
@@ -190,8 +214,6 @@ const App: React.FC = () => {
         const file = await getReportFile(report);
 
         // 1. Try Native Web Share (Preferred for Mobile/Tablet)
-        // Note: navigator.canShare might return false on some Androids even if share works for files,
-        // but it's safer to check.
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
@@ -201,7 +223,6 @@ const App: React.FC = () => {
             return; // Success
         }
         
-        // If we get here, native sharing is not supported or failed check
         throw new Error("Native share not supported");
 
       } catch (error) {
@@ -211,10 +232,6 @@ const App: React.FC = () => {
           await exportReportToJSON(report);
           
           if (isMobile) {
-              // Mobile Fallback Strategy
-              // On mobile, we cannot drag-and-drop. We must guide them to the file.
-              
-              // Attempt to open WeChat to be helpful
               setTimeout(() => {
                 window.location.href = "weixin://";
               }, 1500);
@@ -227,7 +244,6 @@ const App: React.FC = () => {
                   "3. In WeChat, click '+' -> 'Files' -> Select the file you just saved."
               );
           } else {
-              // Desktop Fallback Strategy
               const iframe = document.createElement("iframe");
               iframe.style.display = "none";
               iframe.src = "weixin://"; 
@@ -338,7 +354,8 @@ const App: React.FC = () => {
             setStudentName={handleNameChange}
             submissionsCount={submissions.length}
             onWeChatShare={handleWeChatShare}
-            onDownload={handleDirectDownload}
+            onDownloadJSON={handleDirectDownload}
+            onDownloadHTML={handleHTMLDownload}
         />
     );
 
@@ -460,16 +477,26 @@ const App: React.FC = () => {
                         
                         <div className="text-center text-gray-300 text-sm font-bold">- OR -</div>
                         
-                        {/* Download Secondary CTA */}
-                        <button 
+                        <div className="flex gap-2">
+                             <button 
+                                 onClick={handleHTMLDownload}
+                                 disabled={!studentName.trim()}
+                                 className={`flex-1 py-3 rounded-xl font-bold text-sm text-white border-b-4 btn-press
+                                    ${!studentName.trim() ? 'bg-gray-300 border-gray-400 cursor-not-allowed' : 'bg-blue-400 hover:bg-blue-500 border-blue-600'}
+                                 `}
+                            >
+                                📄 Save HTML Report
+                            </button>
+                            <button 
                                  onClick={handleDirectDownload}
                                  disabled={!studentName.trim()}
-                                 className={`w-full py-3 rounded-xl font-bold text-lg text-white border-b-4 btn-press
+                                 className={`flex-1 py-3 rounded-xl font-bold text-sm text-white border-b-4 btn-press
                                     ${!studentName.trim() ? 'bg-gray-300 border-gray-400 cursor-not-allowed' : 'bg-yellow-400 hover:bg-yellow-500 border-yellow-600 text-yellow-900'}
                                  `}
                             >
-                                📥 Save to Device
-                        </button>
+                                📥 Backup JSON
+                            </button>
+                        </div>
                     </div>
                  </div>
              </div>

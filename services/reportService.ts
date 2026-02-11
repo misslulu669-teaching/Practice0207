@@ -1,5 +1,6 @@
 import { SavedReport, SubmissionRecord } from '../types';
 import { blobToBase64 } from './geminiService';
+import { LESSONS } from '../constants';
 
 // --- IndexedDB Configuration ---
 const DB_NAME = 'PandaClassDB';
@@ -194,34 +195,152 @@ export const getReportFile = async (report: SavedReport): Promise<File> => {
   const filename = `panda_homework_${report.studentName}_${dateStr}_${timeStr}.json`;
   
   // CRITICAL FIX: Use application/octet-stream.
-  // This forces browsers (especially iOS Safari) to treat it as a download/file to save
-  // rather than trying to display the JSON text string.
   return new File([jsonString], filename, { type: 'application/octet-stream' });
+};
+
+// --- HTML REPORT GENERATOR ---
+export const generateHTMLReport = async (report: SavedReport): Promise<File> => {
+    const lesson = LESSONS.find(l => l.id === report.lessonId);
+    const title = lesson?.title || "Unknown Lesson";
+    const dateStr = new Date(report.timestamp).toLocaleString();
+    
+    // We reuse this to get the base64 strings for audio
+    const transportData = await prepareReportForTransport(report);
+
+    let htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report: ${report.studentName}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+      body { font-family: 'Fredoka', sans-serif; background-color: #f0f9ff; background-image: radial-gradient(#bae6fd 2px, transparent 2px); background-size: 32px 32px; }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+    <div class="max-w-3xl mx-auto bg-white rounded-[2rem] shadow-xl border-4 border-white p-6 sm:p-10">
+        
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-gray-100 pb-6 mb-8 gap-4">
+            <div class="flex items-center gap-4">
+                <div class="text-4xl bg-yellow-100 p-3 rounded-full">🐼</div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">Homework Report</h1>
+                    <p class="text-blue-500 font-bold text-lg">${report.studentName}</p>
+                </div>
+            </div>
+            <div class="text-left sm:text-right">
+                <div class="font-bold text-gray-700">${title}</div>
+                <div class="text-gray-400 text-sm">${dateStr}</div>
+                <div class="mt-2 inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full font-bold text-sm">
+                    Score: ${report.totalScore}
+                </div>
+            </div>
+        </div>
+
+        <!-- Submissions -->
+        <div class="space-y-6">
+`;
+
+    transportData.submissions.forEach((sub: any) => {
+        // Find Vocabulary context
+        let promptText = "Unknown Item";
+        const vocab = lesson?.vocabulary.find(v => v.id === sub.itemId);
+        
+        if (vocab) {
+            promptText = `${vocab.chinese} (${vocab.pinyin})`;
+        } else if (lesson?.dialogues) {
+            // Check dialogues
+            const d = lesson.dialogues.find(d => sub.itemId.startsWith(d.id));
+            if (d) promptText = "Dialogue Roleplay";
+        }
+
+        if (sub.type === 'writing') {
+            const isCorrect = sub.score > 0;
+            htmlContent += `
+            <div class="bg-blue-50 rounded-2xl p-5 border-l-8 ${isCorrect ? 'border-green-400' : 'border-red-400'}">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-blue-500 uppercase tracking-widest">✍️ Spelling</span>
+                    <span class="text-2xl">${isCorrect ? '✅' : '❌'}</span>
+                </div>
+                <div class="font-bold text-gray-700 text-lg mb-1">${promptText}</div>
+                <div class="text-gray-500">
+                    Student wrote: <span class="font-bold font-mono ${isCorrect ? 'text-green-600' : 'text-red-500'} text-xl">${sub.input}</span>
+                </div>
+            </div>`;
+        } 
+        else if (sub.type === 'speaking' || sub.type === 'dialogue') {
+            // EMBED AUDIO HERE
+            // sub.input.data is the base64 string
+            const audioSrc = `data:${sub.input.mimeType};base64,${sub.input.data}`;
+            const typeLabel = sub.type === 'dialogue' ? '💬 Dialogue' : '🎤 Speaking';
+            
+            htmlContent += `
+            <div class="bg-green-50 rounded-2xl p-5 border-l-8 border-green-400">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-green-600 uppercase tracking-widest">${typeLabel}</span>
+                    <span class="text-2xl">🔊</span>
+                </div>
+                <div class="font-bold text-gray-700 text-lg mb-3">${promptText}</div>
+                
+                <!-- Native Audio Player with Base64 Source -->
+                <audio controls src="${audioSrc}" class="w-full h-10 rounded-full"></audio>
+            </div>`;
+        }
+        else if (sub.type === 'quiz') {
+            const isCorrect = sub.score > 0;
+            htmlContent += `
+            <div class="bg-purple-50 rounded-2xl p-5 border-l-8 ${isCorrect ? 'border-purple-400' : 'border-red-400'}">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-bold text-purple-500 uppercase tracking-widest">🧩 Quiz</span>
+                    <span class="text-xl font-bold ${isCorrect ? 'text-green-600' : 'text-red-500'}">${isCorrect ? 'Correct' : 'Incorrect'}</span>
+                </div>
+                <div class="font-bold text-gray-700">${promptText}</div>
+            </div>`;
+        }
+    });
+
+    htmlContent += `
+        </div>
+        <div class="mt-10 pt-6 border-t-2 border-gray-100 text-center">
+            <p class="text-gray-400 font-bold text-sm">Generated by Little Panda Class 🐼</p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+    // Create File
+    const filename = `Report_${report.studentName}_${dateStr.split(',')[0].replace(/\//g, '-')}.html`;
+    return new File([htmlContent], filename, { type: 'text/html' });
 };
 
 export const exportReportToJSON = async (report: SavedReport) => {
   const file = await getReportFile(report);
+  downloadFile(file);
+};
+
+export const exportReportToHTML = async (report: SavedReport) => {
+    const file = await generateHTMLReport(report);
+    downloadFile(file);
+};
+
+// Helper to trigger download
+const downloadFile = (file: File) => {
   const url = URL.createObjectURL(file);
-  
   const downloadAnchorNode = document.createElement('a');
   downloadAnchorNode.href = url;
   downloadAnchorNode.download = file.name;
-  
-  // Required for Firefox and some mobile browsers
   document.body.appendChild(downloadAnchorNode);
-  
-  // Trigger click
   downloadAnchorNode.click();
   
-  // CRITICAL FIX: Add a timeout before cleanup.
-  // Mobile browsers can be slow to process the click event.
-  // Revoking immediately can cause the download to fail on iOS.
   setTimeout(() => {
     if (document.body.contains(downloadAnchorNode)) {
         document.body.removeChild(downloadAnchorNode);
     }
     URL.revokeObjectURL(url);
-  }, 500);
+  }, 1000); // 1s delay for mobile
 };
 
 export const importReportFromJSON = async (file: File): Promise<boolean> => {
