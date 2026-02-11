@@ -61,6 +61,18 @@ const Quiz: React.FC<Props> = ({ data, onComplete, onRecord }) => {
     }
   };
 
+  const handleSkip = () => {
+    // Reset state for next item
+    setShowResult(null);
+    if (currentIndex < data.length - 1) {
+        const nextIdx = currentIndex + 1;
+        setCurrentIndex(nextIdx);
+        setCurrentOptions(generateOptions(data[nextIdx], data));
+    } else {
+        onComplete();
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <h2 className="text-3xl font-bold text-gray-700 mb-8">🧩 Match Meanings</h2>
@@ -105,6 +117,18 @@ const Quiz: React.FC<Props> = ({ data, onComplete, onRecord }) => {
        {showResult === 'wrong' && (
           <div className="mt-6 text-red-500 font-bold text-xl animate-bounce">Try again!</div>
        )}
+
+        <div className="mt-8">
+            <button
+                onClick={handleSkip}
+                className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+            >
+                Skip ⏩
+            </button>
+        </div>
+        <div className="mt-2 text-gray-300 font-bold text-sm">
+            {currentIndex + 1} / {data.length}
+        </div>
     </div>
   );
 };

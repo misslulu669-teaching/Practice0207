@@ -94,6 +94,18 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
         onRecord(newRecord);
     }
 
+    resetAndAdvance();
+  };
+
+  const handleSkip = () => {
+      // If currently recording, stop it first
+      if (isRecording && mediaRecorderRef.current) {
+          stopRecording();
+      }
+      resetAndAdvance();
+  };
+
+  const resetAndAdvance = () => {
     // Reset local state for next item
     setRecordedBlob(null);
     setAudioUrl(null);
@@ -163,6 +175,13 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
             {currentIndex < data.length - 1 ? "Save & Next ➡️" : "Save & Finish 🏁"}
           </button>
         )}
+
+        <button
+            onClick={handleSkip}
+            className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+        >
+            Skip ⏩
+        </button>
       </div>
       
       <div className="mt-8 text-gray-400 font-bold">

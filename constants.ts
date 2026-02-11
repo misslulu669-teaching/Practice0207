@@ -77,6 +77,109 @@ export const LESSONS: Lesson[] = [
         ]
       }
     ]
+  },
+  {
+    id: 3,
+    title: "Lesson 3: Introduction (Part 1)",
+    description: "S1-A07: How old are you (Part 1). Learn to ask names and nationality.",
+    vocabulary: [
+      { id: 'l3_v1', chinese: '叫', pinyin: 'jiào', english: 'to call / name is', imageKeyword: 'call_name' },
+      { id: 'l3_v2', chinese: '什么', pinyin: 'shén me', english: 'what', imageKeyword: 'what' },
+      { id: 'l3_v3', chinese: '名字', pinyin: 'míng zi', english: 'name', imageKeyword: 'nametag' },
+      { id: 'l3_v4', chinese: '中国', pinyin: 'zhōng guó', english: 'China', imageKeyword: 'china' },
+      { id: 'l3_v5', chinese: '人', pinyin: 'rén', english: 'person', imageKeyword: 'person' },
+      { id: 'l3_v6', chinese: '哪', pinyin: 'nǎ', english: 'which', imageKeyword: 'map_location' },
+      { id: 'l3_v7', chinese: '国', pinyin: 'guó', english: 'country', imageKeyword: 'globe' },
+      { id: 'l3_v8', chinese: '国家', pinyin: 'guó jiā', english: 'country / nation', imageKeyword: 'flags' },
+    ],
+    dialogues: [
+      {
+        id: 'l3_d1',
+        lines: [
+          { speaker: 'A', chinese: '你叫什么？', pinyin: 'Nǐ jiào shénme?', english: 'What is your name?' },
+          { speaker: 'B', chinese: '我叫乐乐。', pinyin: 'Wǒ jiào Lè Le.', english: 'My name is Lele.' },
+        ]
+      },
+      {
+        id: 'l3_d2',
+        lines: [
+          { speaker: 'A', chinese: '你是哪国人？', pinyin: 'Nǐ shì nǎ guó rén?', english: 'Which country are you from?' },
+          { speaker: 'B', chinese: '我是中国人。', pinyin: 'Wǒ shì Zhōngguó rén.', english: 'I am Chinese.' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 4,
+    title: "Lesson 4: Age & Numbers (Part 2)",
+    description: "S1-A08: How old are you (Part 2). Learn numbers 1-5 and asking age.",
+    vocabulary: [
+      { id: 'l4_v1', chinese: '几', pinyin: 'jǐ', english: 'how many / how much', imageKeyword: 'question_quantity' },
+      { id: 'l4_v2', chinese: '岁', pinyin: 'suì', english: 'year (of age)', imageKeyword: 'birthday_cake' },
+      { id: 'l4_v3', chinese: '一', pinyin: 'yī', english: 'one', imageKeyword: 'number_1' },
+      { id: 'l4_v4', chinese: '二', pinyin: 'èr', english: 'two', imageKeyword: 'number_2' },
+      { id: 'l4_v5', chinese: '三', pinyin: 'sān', english: 'three', imageKeyword: 'number_3' },
+      { id: 'l4_v6', chinese: '四', pinyin: 'sì', english: 'four', imageKeyword: 'number_4' },
+      { id: 'l4_v7', chinese: '五', pinyin: 'wǔ', english: 'five', imageKeyword: 'number_5' },
+      { id: 'l4_v8', chinese: '了', pinyin: 'le', english: '(particle)', imageKeyword: 'completed' },
+    ],
+    dialogues: [
+      {
+        id: 'l4_d1',
+        lines: [
+          { speaker: 'A', chinese: '你几岁了？', pinyin: 'Nǐ jǐ suì le?', english: 'How old are you?' },
+          { speaker: 'B', chinese: '我三岁了。', pinyin: 'Wǒ sān suì le.', english: 'I am three years old.' },
+        ]
+      },
+      {
+        id: 'l4_d2',
+        lines: [
+          { speaker: 'A', chinese: '你姐姐几岁了？', pinyin: 'Nǐ jiějie jǐ suì le?', english: 'How old is your older sister?' },
+          { speaker: 'B', chinese: '我姐姐四岁了。', pinyin: 'Wǒ jiějie sì suì le.', english: 'My sister is four years old.' },
+        ]
+      },
+      {
+        id: 'l4_d3',
+        lines: [
+            { speaker: 'A', chinese: '你叫什么？', pinyin: 'Nǐ jiào shénme?', english: 'What is your name?' },
+            { speaker: 'B', chinese: '我叫乐乐，我是中国人，我五岁了。', pinyin: 'Wǒ jiào LèLe, wǒ shì Zhōngguó rén, wǒ wǔ suì le.', english: 'I am Lele, I am Chinese, I am 5.' },
+        ]
+      }
+    ]
+  },
+  {
+    id: 5,
+    title: "Lesson 5: Family Members",
+    description: "S1-A09: How many people in your family. Learn numbers 6-10 and family terms.",
+    vocabulary: [
+      { id: 'l5_v1', chinese: '有', pinyin: 'yǒu', english: 'to have', imageKeyword: 'holding' },
+      { id: 'l5_v2', chinese: '没', pinyin: 'méi', english: 'not have', imageKeyword: 'empty_box' },
+      { id: 'l5_v3', chinese: '口', pinyin: 'kǒu', english: '(measure word for family)', imageKeyword: 'family_icon' },
+      { id: 'l5_v4', chinese: '六', pinyin: 'liù', english: 'six', imageKeyword: 'number_6' },
+      { id: 'l5_v5', chinese: '七', pinyin: 'qī', english: 'seven', imageKeyword: 'number_7' },
+      { id: 'l5_v6', chinese: '八', pinyin: 'bā', english: 'eight', imageKeyword: 'number_8' },
+      { id: 'l5_v7', chinese: '九', pinyin: 'jiǔ', english: 'nine', imageKeyword: 'number_9' },
+      { id: 'l5_v8', chinese: '十', pinyin: 'shí', english: 'ten', imageKeyword: 'number_10' },
+      { id: 'l5_v9', chinese: '家', pinyin: 'jiā', english: 'family / home', imageKeyword: 'house' },
+      { id: 'l5_v10', chinese: '呢', pinyin: 'ne', english: '(question particle)', imageKeyword: 'question_mark' },
+    ],
+    dialogues: [
+      {
+        id: 'l5_d1',
+        lines: [
+          { speaker: 'A', chinese: '你家有几口人？', pinyin: 'Nǐ jiā yǒu jǐ kǒu rén?', english: 'How many people are in your family?' },
+          { speaker: 'B', chinese: '我家有七口人。', pinyin: 'Wǒ jiā yǒu qī kǒu rén.', english: 'My family has seven people.' },
+        ]
+      },
+      {
+        id: 'l5_d2',
+        lines: [
+          { speaker: 'A', chinese: '你有哥哥吗？', pinyin: 'Nǐ yǒu gēge ma?', english: 'Do you have an older brother?' },
+          { speaker: 'B', chinese: '我没有哥哥，你呢？', pinyin: 'Wǒ méi yǒu gēge, nǐ ne?', english: 'I don\'t have a brother, and you?' },
+          { speaker: 'A', chinese: '我有哥哥。', pinyin: 'Wǒ yǒu gēge.', english: 'I have an older brother.' },
+        ]
+      }
+    ]
   }
 ];
 
@@ -97,7 +200,7 @@ export const PLACEHOLDER_IMAGES: Record<string, string> = {
   'woman': 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=400&q=80',
   
   // L2
-  'monday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Monday', // Using generic generic images for days
+  'monday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Monday', 
   'tuesday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Tuesday',
   'wednesday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Wednesday',
   'thursday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Thursday',
@@ -105,4 +208,37 @@ export const PLACEHOLDER_IMAGES: Record<string, string> = {
   'saturday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Saturday',
   'sunday': 'https://images.unsplash.com/photo-1596526131083-e8c633c948d2?w=400&q=80&text=Sunday',
   'too_hot': 'https://images.unsplash.com/photo-1629814597116-29177112eb1e?w=400&q=80',
+
+  // L3 Assets
+  'call_name': 'https://images.unsplash.com/photo-1557800636-894a64c1696f?w=400&q=80', // Chatting/Calling
+  'what': 'https://images.unsplash.com/photo-1633511090164-b43840ea1607?w=400&q=80', // Question mark art
+  'nametag': 'https://images.unsplash.com/photo-1516383274235-5f42d6c6426d?w=400&q=80', // Hello name tag
+  'china': 'https://images.unsplash.com/photo-1543158028-2e061730048e?w=400&q=80', // Great Wall/China
+  'person': 'https://images.unsplash.com/photo-1542596594-649edbc13630?w=400&q=80', // Happy person
+  'map_location': 'https://images.unsplash.com/photo-1569336415962-a4bd9f69cd83?w=400&q=80', // Map
+  'globe': 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&q=80', // Globe
+  'flags': 'https://images.unsplash.com/photo-1532375810709-75b1da00537c?w=400&q=80', // Flags
+
+  // L4 Assets
+  'question_quantity': 'https://images.unsplash.com/photo-1605106702734-205df224ecce?w=400&q=80', // Question
+  'birthday_cake': 'https://images.unsplash.com/photo-1558301211-0d8c8ddee6ec?w=400&q=80', // Cake
+  'number_1': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=1',
+  'number_2': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=2',
+  'number_3': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=3',
+  'number_4': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=4',
+  'number_5': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=5',
+  'completed': 'https://images.unsplash.com/photo-1499336315816-097655dcfbda?w=400&q=80', // Checkmark/Done
+
+  // L5 Assets
+  'holding': 'https://images.unsplash.com/photo-1616575459392-71c261e0691e?w=400&q=80', // Hands holding
+  'empty_box': 'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?w=400&q=80', // Empty
+  'family_icon': 'https://images.unsplash.com/photo-1542037104857-ffbb0b9155fb?w=400&q=80', // Family
+  'number_6': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=6',
+  'number_7': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=7',
+  'number_8': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=8',
+  'number_9': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=9',
+  'number_10': 'https://images.unsplash.com/photo-1555819206-8f85f395632a?w=400&q=80&text=10',
+  'house': 'https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=400&q=80', // Home
+  'question_mark': 'https://images.unsplash.com/photo-1599508704512-2f19efd1e35f?w=400&q=80', // Question
+  'family_photo': 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=400&q=80', // Large family
 };

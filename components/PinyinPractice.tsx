@@ -140,6 +140,18 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
     }
   };
 
+  const handleSkip = () => {
+      // Reset penalty if active
+      setPenaltyTime(0);
+      setUserInput([]);
+      
+      if (currentIndex < data.length - 1) {
+          setCurrentIndex(prev => prev + 1);
+      } else {
+          onComplete();
+      }
+  };
+
   const isPenaltyActive = penaltyTime > 0;
 
   return (
@@ -214,18 +226,27 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
           </div>
 
           {/* Submit Button */}
-          <button
-            onClick={checkAnswer}
-            disabled={userInput.length === 0}
-            className={`
-                w-full max-w-md py-4 rounded-2xl font-bold text-xl text-white transition-all
-                ${userInput.length === 0 
-                    ? 'bg-gray-300 cursor-not-allowed' 
-                    : 'bg-green-500 hover:bg-green-600 border-b-4 border-green-700 btn-press'}
-            `}
-          >
-            Check Answer ✅
-          </button>
+          <div className="flex flex-col gap-3 items-center w-full max-w-md">
+            <button
+                onClick={checkAnswer}
+                disabled={userInput.length === 0}
+                className={`
+                    w-full py-4 rounded-2xl font-bold text-xl text-white transition-all
+                    ${userInput.length === 0 
+                        ? 'bg-gray-300 cursor-not-allowed' 
+                        : 'bg-green-500 hover:bg-green-600 border-b-4 border-green-700 btn-press'}
+                `}
+            >
+                Check Answer ✅
+            </button>
+            
+            <button
+                onClick={handleSkip}
+                className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+            >
+                Skip ⏩
+            </button>
+          </div>
       </div>
 
       {/* Penalty Overlay */}

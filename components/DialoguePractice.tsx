@@ -93,6 +93,18 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
         });
     }
 
+    resetAndAdvance();
+  };
+
+  const handleSkip = () => {
+      // Clean up mic if active
+      if (isRecording && mediaRecorderRef.current) {
+          stopRecording();
+      }
+      resetAndAdvance();
+  };
+
+  const resetAndAdvance = () => {
     // Reset local state
     setRecordedBlob(null);
     setAudioUrl(null);
@@ -169,7 +181,7 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
         ))}
       </div>
 
-      <div className="mt-auto w-full max-w-md">
+      <div className="mt-auto w-full max-w-md flex flex-col gap-3 items-center">
          {/* Only enable Next if user has recorded something (if there is a B line) or just always allow for flexibility */}
          <button
             onClick={() => {
@@ -185,6 +197,13 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
             `}
           >
             {currentGroupIdx < data.length - 1 ? "Next Dialogue ➡️" : "Finish! 🎉"}
+          </button>
+
+          <button
+                onClick={handleSkip}
+                className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+            >
+                Skip ⏩
           </button>
       </div>
     </div>
