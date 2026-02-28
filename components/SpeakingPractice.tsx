@@ -120,7 +120,14 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full">
+    <div className="flex flex-col items-center justify-center h-full relative">
+      <button
+          onClick={handleSkip}
+          className="absolute top-0 left-0 text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+      >
+          Skip ⏩
+      </button>
+
       <h2 className="text-3xl font-bold text-gray-700 mb-6">🎤 Listen & Repeat</h2>
       
       <div className="bg-green-50 p-6 rounded-3xl border-4 border-green-200 mb-8 flex flex-col items-center gap-4 w-full max-w-md">
@@ -175,13 +182,6 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
             {currentIndex < data.length - 1 ? "Save & Next ➡️" : "Save & Finish 🏁"}
           </button>
         )}
-
-        <button
-            onClick={handleSkip}
-            className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
-        >
-            Skip ⏩
-        </button>
       </div>
       
       <div className="mt-8 text-gray-400 font-bold">

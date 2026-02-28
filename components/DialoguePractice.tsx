@@ -118,7 +118,14 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   };
 
   return (
-    <div className="flex flex-col items-center h-full">
+    <div className="flex flex-col items-center h-full relative">
+      <button
+          onClick={handleSkip}
+          className="absolute top-0 left-0 text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+      >
+          Skip ⏩
+      </button>
+
       <h2 className="text-3xl font-bold text-gray-700 mb-4">💬 Role Play</h2>
       <p className="text-gray-500 mb-6">Teacher reads A. You read & record B.</p>
 
@@ -197,13 +204,6 @@ const DialoguePractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
             `}
           >
             {currentGroupIdx < data.length - 1 ? "Next Dialogue ➡️" : "Finish! 🎉"}
-          </button>
-
-          <button
-                onClick={handleSkip}
-                className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
-            >
-                Skip ⏩
           </button>
       </div>
     </div>

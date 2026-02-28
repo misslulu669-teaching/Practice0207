@@ -323,7 +323,14 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const isWordComplete = currentSyllableIndex === targetSyllables.length;
 
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full">
+    <div className="flex flex-col items-center justify-center h-full w-full relative">
+      <button
+          onClick={handleSkip}
+          className="absolute top-0 left-0 text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
+      >
+          Skip ⏩
+      </button>
+
       <h2 className="text-3xl font-bold text-gray-700 mb-2">🎹 Build the Pinyin</h2>
       
       {/* Visual Cue */}
@@ -446,12 +453,7 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
           )}
           
           <div className="flex justify-center w-full">
-            <button
-                onClick={handleSkip}
-                className="text-gray-400 hover:text-gray-600 font-bold py-2 px-4 rounded-xl border-2 border-transparent hover:border-gray-200 transition-colors"
-            >
-                Skip ⏩
-            </button>
+            {/* Skip button moved to top-left */}
           </div>
       </div>
 
