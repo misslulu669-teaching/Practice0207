@@ -258,17 +258,41 @@ export const generateHTMLReport = async (report: SavedReport): Promise<File> => 
         }
 
         if (sub.type === 'writing') {
-            const isCorrect = sub.score > 0;
+            const attempts = sub.attempts || 1;
+            // User request: Show Green Check ONLY if correct on first try (attempts === 1).
+            // Otherwise show Red Cross (even if they eventually got it right).
+            const isFirstTryCorrect = attempts === 1;
+            
+            let detailsHtml = '';
+            
+            if (sub.firstAttemptInput && sub.firstAttemptInput !== sub.input) {
+                 detailsHtml += `
+                    <div class="mt-2 pt-2 border-t border-blue-100">
+                        <div class="text-xs font-bold text-gray-400 uppercase">First Attempt</div>
+                        <div class="font-mono text-red-400 text-lg">${sub.firstAttemptInput}</div>
+                    </div>
+                 `;
+            }
+
             htmlContent += `
-            <div class="bg-blue-50 rounded-2xl p-5 border-l-8 ${isCorrect ? 'border-green-400' : 'border-red-400'}">
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-xs font-bold text-blue-500 uppercase tracking-widest">✍️ Spelling</span>
-                    <span class="text-2xl">${isCorrect ? '✅' : '❌'}</span>
+            <div class="bg-blue-50 rounded-2xl p-5 border-l-8 ${isFirstTryCorrect ? 'border-green-400' : 'border-red-400'}">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="text-xs font-bold text-blue-500 uppercase tracking-widest">✍️ Spelling</span>
+                        <span class="ml-2 text-xs font-bold bg-white text-blue-400 px-2 py-1 rounded-full border border-blue-100">
+                            ${attempts} ${attempts === 1 ? 'Attempt' : 'Attempts'}
+                        </span>
+                    </div>
+                    <span class="text-2xl">${isFirstTryCorrect ? '✅' : '❌'}</span>
                 </div>
+                
                 <div class="font-bold text-gray-700 text-lg mb-1">${promptText}</div>
+                
                 <div class="text-gray-500">
-                    Student wrote: <span class="font-bold font-mono ${isCorrect ? 'text-green-600' : 'text-red-500'} text-xl">${sub.input}</span>
+                    Final Answer: <span class="font-bold font-mono text-green-600 text-xl">${sub.input}</span>
                 </div>
+                
+                ${detailsHtml}
             </div>`;
         } 
         else if (sub.type === 'speaking' || sub.type === 'dialogue') {

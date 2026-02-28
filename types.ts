@@ -45,6 +45,8 @@ export interface SubmissionRecord {
   input: string | Blob; 
   score: number;
   feedback: string;
+  attempts?: number;
+  firstAttemptInput?: string;
 }
 
 export interface SavedReport {
