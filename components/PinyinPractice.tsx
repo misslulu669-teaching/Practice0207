@@ -4,8 +4,6 @@ import AudioPlayer from './AudioPlayer';
 import { speakText } from '../services/geminiService';
 import { SOUNDS, PLACEHOLDER_IMAGES } from '../constants';
 
-import { pinyin } from 'pinyin-pro';
-
 interface Props {
   data: VocabularyItem[];
   onComplete: () => void;
@@ -139,14 +137,10 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
 
   const currentItem = data[currentIndex];
 
-  // Generate authoritative pinyin using pinyin-pro
+  // Use the authoritative pinyin from the lesson data
   const targetPinyin = useMemo(() => {
       if (!currentItem) return '';
-      // Use pinyin-pro to generate standard pinyin
-      // toneType: 'symbol' gives us tone marks (ā)
-      // type: 'string' gives us a space-separated string
-      // v: true ensures ü is handled correctly if needed
-      return pinyin(currentItem.chinese, { toneType: 'symbol', type: 'string', v: true });
+      return currentItem.pinyin;
   }, [currentItem]);
 
   const targetSyllables = useMemo(() => {
