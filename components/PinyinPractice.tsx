@@ -136,6 +136,12 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const [firstAttempt, setFirstAttempt] = useState<string | null>(null);
 
   const currentItem = data[currentIndex];
+  const [imgError, setImgError] = useState(false);
+
+  // Reset imgError when current item changes
+  useEffect(() => {
+    setImgError(false);
+  }, [currentIndex]);
 
   // Use the authoritative pinyin from the lesson data
   const targetPinyin = useMemo(() => {
@@ -329,11 +335,31 @@ const PinyinPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
       
       {/* Visual Cue */}
       <div className="flex items-center gap-4 mb-4">
-         <img 
+         {!imgError ? (
+           <img 
             src={PLACEHOLDER_IMAGES[currentItem.imageKeyword]} 
             alt={currentItem.english}
-            className="w-20 h-20 object-cover rounded-xl border-2 border-white shadow-sm"
-         />
+            referrerPolicy="no-referrer"
+            onError={() => setImgError(true)}
+            className="w-20 h-20 object-cover rounded-xl border-2 border-white shadow-sm flex flex-col items-center justify-center bg-gray-100 text-gray-400 italic text-[10px]"
+           />
+         ) : (
+           <div className="w-20 h-20 bg-white rounded-xl border-2 border-gray-200 shadow-sm flex flex-col items-center justify-center">
+             <span className="text-2xl mb-1">
+               {
+                 {
+                   'how_many': '🍎',
+                   'thermometer': '🌡️',
+                   'number_100': '💯',
+                   'daytime': '☀️',
+                   'nighttime': '🌙',
+                   'number_0': '0️⃣'
+                 }[currentItem.imageKeyword] || '🖼️'
+               }
+             </span>
+             <span className="text-[10px] text-gray-400 font-bold overflow-hidden whitespace-nowrap text-ellipsis px-1 w-full text-center">{currentItem.english}</span>
+           </div>
+         )}
          <div className="flex flex-col">
             <span className="text-2xl font-bold text-gray-800">{currentItem.chinese}</span>
             <AudioPlayer text={currentItem.chinese} autoPlay label="Listen" />

@@ -19,6 +19,12 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
   const chunksRef = useRef<Blob[]>([]);
 
   const currentItem = data[currentIndex];
+  const [imgError, setImgError] = useState(false);
+
+  // Reset imgError when current item changes
+  useEffect(() => {
+    setImgError(false);
+  }, [currentIndex]);
 
   // Cleanup object URL
   useEffect(() => {
@@ -131,11 +137,31 @@ const SpeakingPractice: React.FC<Props> = ({ data, onComplete, onRecord }) => {
       <h2 className="text-3xl font-bold text-gray-700 mb-6">🎤 Listen & Repeat</h2>
       
       <div className="bg-green-50 p-6 rounded-3xl border-4 border-green-200 mb-8 flex flex-col items-center gap-4 w-full max-w-md">
-         <img 
-          src={PLACEHOLDER_IMAGES[currentItem.imageKeyword]} 
-          alt={currentItem.english}
-          className="w-48 h-48 object-cover rounded-2xl border-2 border-white shadow-md mb-2"
-        />
+         {!imgError ? (
+           <img 
+            src={PLACEHOLDER_IMAGES[currentItem.imageKeyword]} 
+            alt={currentItem.english}
+            referrerPolicy="no-referrer"
+            onError={() => setImgError(true)}
+            className="w-48 h-48 object-cover rounded-2xl border-2 border-white shadow-md mb-2 flex flex-col items-center justify-center bg-gray-100 text-gray-400 italic font-medium"
+          />
+         ) : (
+           <div className="w-48 h-48 bg-white rounded-2xl border-2 border-green-100 shadow-md mb-2 flex flex-col items-center justify-center">
+             <span className="text-6xl mb-2">
+               {
+                 {
+                   'how_many': '🍎❓',
+                   'thermometer': '🌡️',
+                   'number_100': '💯',
+                   'daytime': '🏙️☀️',
+                   'nighttime': '🏙️🌙',
+                   'number_0': '0️⃣'
+                 }[currentItem.imageKeyword] || '🖼️'
+               }
+             </span>
+             <span className="text-xs text-gray-400 font-bold">{currentItem.english}</span>
+           </div>
+         )}
         <div className="text-6xl font-bold text-gray-800">{currentItem.chinese}</div>
         <div className="text-2xl text-blue-500 font-bold">{currentItem.pinyin}</div>
         <AudioPlayer text={currentItem.chinese} label="Hear Teacher" />
